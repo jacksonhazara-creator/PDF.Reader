@@ -1,0 +1,16 @@
+bin/
+obj/
+artifacts/
+publish/
+Releases/
+TestResults/
+*.user
+*.suo
+.vs/
+.idea/
+*.swp
+# Never commit signing material or secrets
+*.pfx
+*.p12
+*.snk
+.env

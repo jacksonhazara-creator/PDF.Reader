@@ -1,0 +1,16 @@
+<Project>
+  <!-- Central package versions. Licenses: Avalonia (MIT), CommunityToolkit.Mvvm (MIT),
+       bblanchon.PDFium.Win32 (PDFium: BSD-3-Clause / Apache-2.0), Velopack (MIT), xUnit (Apache-2.0). -->
+  <ItemGroup>
+    <PackageVersion Include="Avalonia" Version="12.1.4" />
+    <PackageVersion Include="Avalonia.Desktop" Version="12.1.4" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.4" />
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageVersion Include="bblanchon.PDFium.Win32" Version="158.0.8111" />
+    <PackageVersion Include="Velopack" Version="1.2.161" />
+
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+  </ItemGroup>
+</Project>

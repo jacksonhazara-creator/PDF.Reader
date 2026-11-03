@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PdfReader.Rendering</RootNamespace>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Prebuilt PDFium without V8: there is no JavaScript engine in the binary at all. -->
+    <PackageReference Include="bblanchon.PDFium.Win32" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PdfReader.Tests" />
+  </ItemGroup>
+
+</Project>
