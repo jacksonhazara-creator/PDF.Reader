@@ -6,10 +6,47 @@
              x:Class="PdfReader.App.Views.DocumentView"
              x:DataType="vm:DocumentViewModel"
              Background="{DynamicResource ViewerBrush}">
-  <Grid RowDefinitions="Auto,*" ColumnDefinitions="Auto,*">
+  <UserControl.Styles>
+    <Style Selector="Border.rail ToggleButton.icon, Border.rail Button.icon">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,1" />
+    </Style>
+    <Style Selector="Rectangle.sep">
+      <Setter Property="Height" Value="1" />
+      <Setter Property="Width" Value="28" />
+      <Setter Property="Margin" Value="0,6" />
+      <Setter Property="Fill" Value="{DynamicResource SubtleBorderBrush}" />
+    </Style>
+    <Style Selector="Rectangle.vsep">
+      <Setter Property="Width" Value="1" />
+      <Setter Property="Height" Value="22" />
+      <Setter Property="Margin" Value="10,0" />
+      <Setter Property="Fill" Value="{DynamicResource SubtleBorderBrush}" />
+    </Style>
+    <Style Selector="Button.swatch">
+      <Setter Property="Width" Value="22" />
+      <Setter Property="Height" Value="22" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="11" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="#33000000" />
+      <Setter Property="Margin" Value="2,0" />
+    </Style>
+    <Style Selector="Button.swatch:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="BorderBrush" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+    <Style Selector="TextBlock.label">
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,0,8,0" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto,Auto,*" ColumnDefinitions="Auto,Auto,*">
 
     <!-- Security banner: active content found and blocked -->
-    <Border Grid.ColumnSpan="2" Background="{DynamicResource WarningBackgroundBrush}" Padding="12,8"
+    <Border Grid.ColumnSpan="3" Background="{DynamicResource WarningBackgroundBrush}" Padding="12,8"
             IsVisible="{Binding IsSecurityBannerVisible}">
       <Grid ColumnDefinitions="Auto,*,Auto">
         <c:Icon Data="{StaticResource IconShield}" Foreground="{DynamicResource WarningForegroundBrush}" Margin="0,0,10,0" />
@@ -18,16 +55,81 @@
       </Grid>
     </Border>
 
+    <!-- Left rail: tools + navigation, beside the document (never on top of it) -->
+    <Border Grid.Row="1" Grid.RowSpan="2" Classes="rail" Width="52" Background="{DynamicResource ChromeBrush}"
+            BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="0,0,1,0">
+      <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="0,8">
+          <ToggleButton Classes="icon" IsChecked="{Binding Main.Markup.IsSelect}" ToolTip.Tip="{l:Tr SelectTip}">
+            <c:Icon Data="{StaticResource IconSelect}" />
+          </ToggleButton>
+          <ToggleButton Classes="icon" IsChecked="{Binding Main.Markup.IsMarker}" ToolTip.Tip="{l:Tr MarkerTip}">
+            <c:Icon Data="{StaticResource IconMarker}" />
+          </ToggleButton>
+          <ToggleButton Classes="icon" IsChecked="{Binding Main.Markup.IsComment}" ToolTip.Tip="{l:Tr CommentTip}">
+            <c:Icon Data="{StaticResource IconComment}" />
+          </ToggleButton>
+          <Button Classes="icon" Click="OnUndo" IsEnabled="{Binding CanUndo}" ToolTip.Tip="{l:Tr CmdUndo}">
+            <c:Icon Data="{StaticResource IconUndo}" />
+          </Button>
+
+          <Rectangle Classes="sep" />
+          <ToggleButton Classes="icon" IsChecked="{Binding IsSidebarOpen}" ToolTip.Tip="{l:Tr SidebarTip}">
+            <c:Icon Data="{StaticResource IconSidebar}" />
+          </ToggleButton>
+
+          <Rectangle Classes="sep" />
+          <TextBox x:Name="PageBox" Width="42" MinWidth="0" MinHeight="26" Padding="2,3" HorizontalContentAlignment="Center"
+                   HorizontalAlignment="Center" FontSize="12" ToolTip.Tip="{l:Tr PageNumberTip}"
+                   AutomationProperties.Name="{l:Tr PageNumberTip}"
+                   Text="{Binding CurrentPageNumber, Mode=OneWay}" KeyDown="OnPageBoxKeyDown" LostFocus="OnPageBoxLostFocus" />
+          <TextBlock Classes="secondary" FontSize="11" Text="{Binding PageCountText}" HorizontalAlignment="Center" Margin="0,3,0,0" />
+
+          <Rectangle Classes="sep" />
+          <Button Classes="icon" Command="{Binding ZoomInCommand}" ToolTip.Tip="{l:Tr ZoomInTip}">
+            <c:Icon Data="{StaticResource IconPlus}" Width="16" Height="16" />
+          </Button>
+          <Button Classes="popup" Padding="2,4" HorizontalAlignment="Center" FontSize="11" MinWidth="46"
+                  HorizontalContentAlignment="Center" Content="{Binding ZoomText}">
+            <Button.Flyout>
+              <MenuFlyout Placement="RightEdgeAlignedTop">
+                <MenuItem Header="{l:Tr FitWidth}" Command="{Binding FitWidthCommand}" InputGesture="Ctrl+D0" />
+                <MenuItem Header="{l:Tr FitPage}" Command="{Binding FitPageCommand}" InputGesture="Ctrl+D2" />
+                <MenuItem Header="{l:Tr ActualSize}" Command="{Binding ActualSizeCommand}" InputGesture="Ctrl+D1" />
+                <Separator />
+                <MenuItem Header="50%" Click="OnZoomPreset" Tag="0.5" />
+                <MenuItem Header="100%" Click="OnZoomPreset" Tag="1" />
+                <MenuItem Header="150%" Click="OnZoomPreset" Tag="1.5" />
+                <MenuItem Header="200%" Click="OnZoomPreset" Tag="2" />
+                <MenuItem Header="400%" Click="OnZoomPreset" Tag="4" />
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
+          <Button Classes="icon" Command="{Binding ZoomOutCommand}" ToolTip.Tip="{l:Tr ZoomOutTip}">
+            <c:Icon Data="{StaticResource IconMinus}" Width="16" Height="16" />
+          </Button>
+          <Button Classes="icon" Command="{Binding FitWidthCommand}" ToolTip.Tip="{l:Tr FitWidthTip}">
+            <c:Icon Data="{StaticResource IconFitWidth}" Width="16" Height="16" />
+          </Button>
+          <Button Classes="icon" Command="{Binding FitPageCommand}" ToolTip.Tip="{l:Tr FitPageTip}">
+            <c:Icon Data="{StaticResource IconFitPage}" Width="16" Height="16" />
+          </Button>
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+
     <!-- Sidebar: thumbnails / bookmarks -->
-    <Border Grid.Row="1" Width="172" IsVisible="{Binding IsSidebarOpen}" Background="{DynamicResource ChromeBrush}"
+    <Border Grid.Row="1" Grid.RowSpan="2" Grid.Column="1" Width="172" IsVisible="{Binding IsSidebarOpen}" Background="{DynamicResource ChromeBrush}"
             BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="0,0,1,0">
       <Grid RowDefinitions="Auto,*">
         <Border Margin="8" Padding="2" CornerRadius="7" Background="{DynamicResource HoverBrush}">
           <UniformGrid Columns="2">
-            <RadioButton Classes="segment" GroupName="sidebar" IsChecked="{Binding IsThumbnailsTab}" ToolTip.Tip="{l:Tr Thumbnails}">
+            <RadioButton Classes="segment" GroupName="sidebar" IsChecked="{Binding IsThumbnailsTab}" ToolTip.Tip="{l:Tr Thumbnails}"
+                         AutomationProperties.Name="{l:Tr Thumbnails}">
               <c:Icon Data="{StaticResource IconGrid}" Width="16" Height="16" />
             </RadioButton>
-            <RadioButton Classes="segment" GroupName="sidebar" IsChecked="{Binding IsOutlineTab}" ToolTip.Tip="{l:Tr Outline}">
+            <RadioButton Classes="segment" GroupName="sidebar" IsChecked="{Binding IsOutlineTab}" ToolTip.Tip="{l:Tr Outline}"
+                         AutomationProperties.Name="{l:Tr Outline}">
               <c:Icon Data="{StaticResource IconList}" Width="16" Height="16" />
             </RadioButton>
           </UniformGrid>
@@ -37,7 +139,8 @@
                  SelectionMode="Single">
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="vm:ThumbnailViewModel">
-              <Button Classes="row" Command="{Binding NavigateCommand}" HorizontalContentAlignment="Center" Padding="4">
+              <Button Classes="row" Command="{Binding NavigateCommand}" HorizontalContentAlignment="Center" Padding="4"
+                      AutomationProperties.Name="{Binding}">
                 <StackPanel Spacing="4" HorizontalAlignment="Center">
                   <Border Width="{Binding Width}" Height="{Binding Height}" Background="White" CornerRadius="3"
                           BoxShadow="{StaticResource SoftShadow}" BorderThickness="2"
@@ -74,52 +177,80 @@
       </Grid>
     </Border>
 
-    <!-- Pages -->
-    <Panel Grid.Row="1" Grid.Column="1" x:Name="ViewerHost" PointerMoved="OnPointerActivity">
-      <c:PdfViewer x:Name="Viewer" />
+    <!-- Tool options (only while Marker or Comment is active) -->
+    <Border Grid.Row="1" Grid.Column="2" IsVisible="{Binding Main.Markup.HasOptions}" Background="{DynamicResource ChromeBrush}"
+            BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="0,0,0,1" Padding="12,6">
+      <Panel DataContext="{Binding Main.Markup}" x:DataType="vm:MarkupViewModel">
+        <!-- Marker -->
+        <WrapPanel IsVisible="{Binding IsMarker}" ItemSpacing="0" LineSpacing="4" VerticalAlignment="Center">
+          <Border Width="34" Height="20" CornerRadius="4" Background="White" Margin="0,0,10,0" VerticalAlignment="Center"
+                  BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="1" ToolTip.Tip="{l:Tr CmdToolMarker}">
+            <Border Background="{Binding MarkerPreview}" CornerRadius="3" />
+          </Border>
+          <ItemsControl ItemsSource="{Binding MarkerColors}" VerticalAlignment="Center">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ColorSwatch">
+                <Button Classes="swatch" Background="{Binding Brush}" ToolTip.Tip="{Binding Hex}" AutomationProperties.Name="{Binding Hex}"
+                        Command="{Binding $parent[ItemsControl].((vm:MarkupViewModel)DataContext).SetMarkerColorCommand}" CommandParameter="{Binding}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Rectangle Classes="vsep" />
+          <TextBlock Classes="label" Text="{l:Tr Transparency}" />
+          <Slider Width="110" Minimum="0" Maximum="90" Value="{Binding MarkerTransparency}" VerticalAlignment="Center"
+                  AutomationProperties.Name="{l:Tr Transparency}" />
+          <TextBlock Classes="label" Width="38" Margin="6,0,0,0" Text="{Binding MarkerTransparency, StringFormat='{}{0:0}%'}" />
+          <Rectangle Classes="vsep" />
+          <TextBlock Classes="label" Text="{l:Tr ColorStrength}" />
+          <Slider Width="110" Minimum="20" Maximum="100" Value="{Binding MarkerStrength}" VerticalAlignment="Center"
+                  AutomationProperties.Name="{l:Tr ColorStrength}" />
+          <TextBlock Classes="label" Width="38" Margin="6,0,0,0" Text="{Binding MarkerStrength, StringFormat='{}{0:0}%'}" />
+          <Rectangle Classes="vsep" />
+          <TextBlock Classes="label" Text="{l:Tr Thickness}" />
+          <Slider Width="90" Minimum="2" Maximum="24" Value="{Binding MarkerThickness}" VerticalAlignment="Center"
+                  AutomationProperties.Name="{l:Tr Thickness}" />
+          <TextBlock Classes="label" Width="38" Margin="6,0,0,0" Text="{Binding MarkerThickness, StringFormat='{}{0:0} pt'}" />
+          <TextBlock Classes="secondary" Text="{l:Tr MarkerHint}" VerticalAlignment="Center" Margin="8,0,0,0" />
+        </WrapPanel>
 
-      <!-- Bottom bar: fades out while reading, returns on mouse move -->
-      <Border x:Name="BottomBar" Classes="floating fade" HorizontalAlignment="Center" VerticalAlignment="Bottom"
-              Margin="0,0,0,18" Padding="6,4" PointerEntered="OnBottomBarEntered">
-        <StackPanel Orientation="Horizontal" Spacing="2">
-          <ToggleButton Classes="icon" IsChecked="{Binding IsSidebarOpen}" ToolTip.Tip="{l:Tr SidebarTip}">
-            <c:Icon Data="{StaticResource IconSidebar}" Width="16" Height="16" />
-          </ToggleButton>
-          <Rectangle Width="1" Height="18" Fill="{DynamicResource SubtleBorderBrush}" Margin="4,0" />
-          <TextBox x:Name="PageBox" Width="54" MinHeight="28" Padding="6,3" HorizontalContentAlignment="Center"
-                   VerticalAlignment="Center" ToolTip.Tip="{l:Tr PageNumberTip}"
-                   Text="{Binding CurrentPageNumber, Mode=OneWay}" KeyDown="OnPageBoxKeyDown" LostFocus="OnPageBoxLostFocus" />
-          <TextBlock Classes="secondary" Text="{Binding PageCountText}" VerticalAlignment="Center" Margin="6,0,8,0" />
-          <Rectangle Width="1" Height="18" Fill="{DynamicResource SubtleBorderBrush}" Margin="4,0" />
-          <Button Classes="icon" Command="{Binding ZoomOutCommand}" ToolTip.Tip="{l:Tr ZoomOutTip}">
-            <c:Icon Data="{StaticResource IconMinus}" Width="16" Height="16" />
-          </Button>
-          <Button Classes="popup" Padding="6,4" MinWidth="58" HorizontalContentAlignment="Center" Content="{Binding ZoomText}">
-            <Button.Flyout>
-              <MenuFlyout Placement="Top">
-                <MenuItem Header="{l:Tr FitWidth}" Command="{Binding FitWidthCommand}" InputGesture="Ctrl+D0" />
-                <MenuItem Header="{l:Tr FitPage}" Command="{Binding FitPageCommand}" InputGesture="Ctrl+D2" />
-                <MenuItem Header="{l:Tr ActualSize}" Command="{Binding ActualSizeCommand}" InputGesture="Ctrl+D1" />
-                <Separator />
-                <MenuItem Header="50%" Click="OnZoomPreset" Tag="0.5" />
-                <MenuItem Header="100%" Click="OnZoomPreset" Tag="1" />
-                <MenuItem Header="150%" Click="OnZoomPreset" Tag="1.5" />
-                <MenuItem Header="200%" Click="OnZoomPreset" Tag="2" />
-                <MenuItem Header="400%" Click="OnZoomPreset" Tag="4" />
-              </MenuFlyout>
-            </Button.Flyout>
-          </Button>
-          <Button Classes="icon" Command="{Binding ZoomInCommand}" ToolTip.Tip="{l:Tr ZoomInTip}">
-            <c:Icon Data="{StaticResource IconPlus}" Width="16" Height="16" />
-          </Button>
-          <Button Classes="icon" Command="{Binding FitWidthCommand}" ToolTip.Tip="{l:Tr FitWidthTip}">
-            <c:Icon Data="{StaticResource IconFitWidth}" Width="16" Height="16" />
-          </Button>
-          <Button Classes="icon" Command="{Binding FitPageCommand}" ToolTip.Tip="{l:Tr FitPageTip}">
-            <c:Icon Data="{StaticResource IconFitPage}" Width="16" Height="16" />
-          </Button>
-        </StackPanel>
-      </Border>
-    </Panel>
+        <!-- Comment -->
+        <WrapPanel IsVisible="{Binding IsComment}" LineSpacing="4" VerticalAlignment="Center">
+          <TextBlock Classes="label" Text="{l:Tr Shape}" />
+          <ItemsControl ItemsSource="{Binding Shapes}" VerticalAlignment="Center">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="2" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ShapeChoice">
+                <Button Classes="icon small" ToolTip.Tip="{Binding Title}" AutomationProperties.Name="{Binding Title}"
+                        Command="{Binding $parent[ItemsControl].((vm:MarkupViewModel)DataContext).SetShapeCommand}" CommandParameter="{Binding}">
+                  <c:Icon Data="{Binding Icon}" Width="18" Height="18" />
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Border Width="26" Height="26" CornerRadius="6" Margin="6,0,0,0" Background="{DynamicResource HoverBrush}" VerticalAlignment="Center">
+            <c:Icon Data="{Binding ShapeIcon}" Width="18" Height="18" Foreground="{Binding CommentBrush}" StrokeThickness="2.4" />
+          </Border>
+          <Rectangle Classes="vsep" />
+          <ItemsControl ItemsSource="{Binding CommentColors}" VerticalAlignment="Center">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ColorSwatch">
+                <Button Classes="swatch" Background="{Binding Brush}" ToolTip.Tip="{Binding Hex}" AutomationProperties.Name="{Binding Hex}"
+                        Command="{Binding $parent[ItemsControl].((vm:MarkupViewModel)DataContext).SetCommentColorCommand}" CommandParameter="{Binding}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Rectangle Classes="vsep" />
+          <TextBlock Classes="label" Text="{l:Tr AttachTo}" />
+          <RadioButton GroupName="anchor" Content="{l:Tr FirstWord}" IsChecked="{Binding OnFirstWord}" Margin="0,0,8,0" />
+          <RadioButton GroupName="anchor" Content="{l:Tr LastWord}" IsChecked="{Binding OnLastWord}" />
+          <TextBlock Classes="secondary" Text="{l:Tr CommentHint}" VerticalAlignment="Center" Margin="12,0,0,0" />
+        </WrapPanel>
+      </Panel>
+    </Border>
+
+    <!-- Pages -->
+    <c:PdfViewer Grid.Row="2" Grid.Column="2" x:Name="Viewer" AutomationProperties.Name="{l:Tr DocumentPages}" />
   </Grid>
 </UserControl>

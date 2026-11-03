@@ -169,6 +169,86 @@ internal static unsafe partial class Pdfium
     [LibraryImport(Lib)] public static partial int FPDFAnnot_GetSubtype(IntPtr annot);
     [LibraryImport(Lib)] public static partial void FPDFPage_CloseAnnot(IntPtr annot);
 
+    // --- Annotation editing & saving ---------------------------------------------------------
+    public const int FPDF_ANNOT_TEXT = 1;
+    public const int FPDF_ANNOT_HIGHLIGHT = 9;
+    public const int FPDF_ANNOT_INK = 15;
+    public const int FPDF_ANNOT_FLAG_PRINT = 1 << 2;
+    public const int FPDF_ANNOT_APPEARANCEMODE_NORMAL = 0;
+    public const int FPDFANNOT_COLORTYPE_Color = 0;
+    public const uint FPDF_INCREMENTAL = 1;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct FS_POINTF { public float X; public float Y; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct FS_QUADPOINTSF { public float X1, Y1, X2, Y2, X3, Y3, X4, Y4; }
+
+    /// <summary>FPDF_FILEWRITE plus our own trailing field (PDFium only reads the first two).</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct FileWrite
+    {
+        public int Version;
+        public delegate* unmanaged<FileWrite*, void*, uint, int> WriteBlock;
+        public IntPtr StreamHandle;
+    }
+
+    [LibraryImport(Lib)] public static partial IntPtr FPDFPage_CreateAnnot(IntPtr page, int subtype);
+    [LibraryImport(Lib)] public static partial int FPDFAnnot_SetRect(IntPtr annot, FS_RECTF* rect);
+    [LibraryImport(Lib)] public static partial int FPDFAnnot_GetRect(IntPtr annot, FS_RECTF* rect);
+    [LibraryImport(Lib)] public static partial int FPDFAnnot_SetColor(IntPtr annot, int type, uint r, uint g, uint b, uint a);
+    [LibraryImport(Lib)] public static partial int FPDFAnnot_AppendAttachmentPoints(IntPtr annot, FS_QUADPOINTSF* quad);
+    [LibraryImport(Lib)] public static partial int FPDFAnnot_AddInkStroke(IntPtr annot, FS_POINTF* points, nuint count);
+    [LibraryImport(Lib)] public static partial int FPDFAnnot_SetBorder(IntPtr annot, float hRadius, float vRadius, float width);
+    [LibraryImport(Lib)] public static partial int FPDFAnnot_SetStringValue(IntPtr annot, byte* key, ushort* value);
+    [LibraryImport(Lib)] public static partial uint FPDFAnnot_GetStringValue(IntPtr annot, byte* key, ushort* buffer, uint buflen);
+    [LibraryImport(Lib)] public static partial int FPDFAnnot_HasKey(IntPtr annot, byte* key);
+    [LibraryImport(Lib)] public static partial int FPDFAnnot_SetAP(IntPtr annot, int mode, ushort* value);
+    [LibraryImport(Lib)] public static partial int FPDFAnnot_SetFlags(IntPtr annot, int flags);
+    [LibraryImport(Lib)] public static partial int FPDFPage_RemoveAnnot(IntPtr page, int index);
+    [LibraryImport(Lib)] public static partial nuint FPDFAnnot_CountAttachmentPoints(IntPtr annot);
+    [LibraryImport(Lib)] public static partial int FPDFAnnot_GetAttachmentPoints(IntPtr annot, nuint index, FS_QUADPOINTSF* quad);
+    [LibraryImport(Lib)] public static partial int FPDF_SaveAsCopy(IntPtr document, FileWrite* fileWrite, uint flags);
+
+    public const int FPDF_ANNOT_SQUARE = 5;
+    public const int FPDF_ANNOT_CIRCLE = 6;
+    public const int FPDF_ANNOT_UNDERLINE = 10;
+    public const int FPDF_ANNOT_SQUIGGLY = 11;
+    public const int FPDF_ANNOT_STRIKEOUT = 12;
+    public const int FPDF_ANNOT_STAMP = 13;
+    public const int FPDF_ANNOT_CARET = 14;
+    public const int FPDF_ANNOT_FREETEXT = 3;
+    public const int FPDFANNOT_COLORTYPE_InteriorColor = 1;
+    public const int FPDF_FILLMODE_NONE = 0;
+    public const int FPDF_FILLMODE_WINDING = 2;
+    public const int FPDF_FONT_TRUETYPE = 2;
+
+    // Page objects (placed inside stamp annotations: typed text, symbols, stamps, signatures)
+    [LibraryImport(Lib)] public static partial int FPDFAnnot_AppendObject(IntPtr annot, IntPtr obj);
+    [LibraryImport(Lib)] public static partial IntPtr FPDFPageObj_NewTextObj(IntPtr document, byte* font, float size);
+    [LibraryImport(Lib)] public static partial IntPtr FPDFPageObj_CreateTextObj(IntPtr document, IntPtr font, float size);
+    [LibraryImport(Lib)] public static partial int FPDFText_SetText(IntPtr textObject, ushort* text);
+    [LibraryImport(Lib)] public static partial IntPtr FPDFText_LoadFont(IntPtr document, byte* data, uint size, int fontType, int cid);
+    [LibraryImport(Lib)] public static partial void FPDFFont_Close(IntPtr font);
+    [LibraryImport(Lib)] public static partial void FPDFPageObj_Transform(IntPtr obj, double a, double b, double c, double d, double e, double f);
+    [LibraryImport(Lib)] public static partial int FPDFPageObj_GetBounds(IntPtr obj, float* left, float* bottom, float* right, float* top);
+    [LibraryImport(Lib)] public static partial IntPtr FPDFPageObj_CreateNewPath(float x, float y);
+    [LibraryImport(Lib)] public static partial int FPDFPath_MoveTo(IntPtr path, float x, float y);
+    [LibraryImport(Lib)] public static partial int FPDFPath_LineTo(IntPtr path, float x, float y);
+    [LibraryImport(Lib)] public static partial int FPDFPath_BezierTo(IntPtr path, float x1, float y1, float x2, float y2, float x3, float y3);
+    [LibraryImport(Lib)] public static partial int FPDFPath_Close(IntPtr path);
+    [LibraryImport(Lib)] public static partial int FPDFPath_SetDrawMode(IntPtr path, int fillMode, int stroke);
+    [LibraryImport(Lib)] public static partial int FPDFPageObj_SetStrokeColor(IntPtr obj, uint r, uint g, uint b, uint a);
+    [LibraryImport(Lib)] public static partial int FPDFPageObj_SetFillColor(IntPtr obj, uint r, uint g, uint b, uint a);
+    [LibraryImport(Lib)] public static partial int FPDFPageObj_SetStrokeWidth(IntPtr obj, float width);
+    [LibraryImport(Lib)] public static partial int FPDFPageObj_SetLineCap(IntPtr obj, int cap);
+    [LibraryImport(Lib)] public static partial int FPDFPageObj_SetLineJoin(IntPtr obj, int join);
+    [LibraryImport(Lib)] public static partial void FPDFPageObj_Destroy(IntPtr obj);
+
+    // File attachment annotations
+    [LibraryImport(Lib)] public static partial IntPtr FPDFAnnot_AddFileAttachment(IntPtr annot, ushort* name);
+    [LibraryImport(Lib)] public static partial int FPDFAttachment_SetFile(IntPtr attachment, IntPtr document, void* contents, uint length);
+
     // --- GDI (printing) ----------------------------------------------------------------
     [LibraryImport("gdi32.dll")] public static partial int StartDocW(IntPtr hdc, DOCINFOW* docInfo);
     [LibraryImport("gdi32.dll")] public static partial int EndDoc(IntPtr hdc);

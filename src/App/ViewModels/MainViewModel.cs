@@ -15,6 +15,8 @@ namespace PdfReader.App.ViewModels;
 public interface IAppShell
 {
     Task<IReadOnlyList<string>> PickPdfFilesAsync();
+    Task<string?> PickSavePathAsync(string suggestedFileName);
+    void CloseWindow();
     Task CopyToClipboardAsync(string text);
     PrintJob? ShowPrintDialog(int pageCount, int currentPage);
     void SetFullScreen(bool fullScreen);
@@ -37,6 +39,7 @@ public sealed partial class MainViewModel : ObservableObject
         ReadAloud = new ReadAloudService();
         Updates = new UpdateService(settings);
         SettingsPage = new SettingsViewModel(this);
+        Markup = new MarkupViewModel(this);
         Commands = BuildCommands();
         Palette = new CommandPaletteViewModel(() => Commands, () => IsCommandPaletteOpen = false);
         ToolGroups = BuildToolGroups();
@@ -49,6 +52,7 @@ public sealed partial class MainViewModel : ObservableObject
     public ReadAloudService ReadAloud { get; }
     public UpdateService Updates { get; }
     public SettingsViewModel SettingsPage { get; }
+    public MarkupViewModel Markup { get; }
     public CommandPaletteViewModel Palette { get; }
     public IReadOnlyList<AppCommand> Commands { get; }
     public IReadOnlyList<ToolGroup> ToolGroups { get; }
@@ -172,11 +176,16 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    public async Task CloseDocumentAsync(DocumentViewModel? document)
+    public async Task CloseDocumentAsync(DocumentViewModel? document) => await TryCloseDocumentAsync(document);
+
+    /// <returns>false when the user cancelled because of unsaved changes.</returns>
+    public async Task<bool> TryCloseDocumentAsync(DocumentViewModel? document)
     {
         document ??= ActiveDocument;
         if (document is null)
-            return;
+            return true;
+        if (document.IsModified && !await ConfirmUnsavedAsync(document))
+            return false;
 
         document.SaveViewState(State.GetDocumentState(document.FilePath));
         var index = Documents.IndexOf(document);
@@ -187,6 +196,84 @@ public sealed partial class MainViewModel : ObservableObject
             IsReadingMode = false;
         SaveState();
         await document.DisposeAsync();
+        return true;
+    }
+
+    /// <summary>"Save changes?" → Save / Don't save / Cancel. Returns false for Cancel (or a failed save).</summary>
+    private async Task<bool> ConfirmUnsavedAsync(DocumentViewModel document)
+    {
+        ActiveDocument = document;
+        var dialog = new DialogViewModel
+        {
+            Title = Loc.Get("UnsavedTitle"),
+            Message = Loc.Format("UnsavedMessage", document.Title),
+            PrimaryText = Loc.Get("Save"),
+            SecondaryText = Loc.Get("DontSave"),
+            TertiaryText = Loc.Get("Cancel"),
+        };
+        await ShowDialogAsync(dialog);
+        return await dialog.Choice switch
+        {
+            0 => await SaveAsync(document, saveAs: false),
+            1 => true,
+            _ => false,
+        };
+    }
+
+    /// <summary>Before the window closes: resolve every document with unsaved changes.</summary>
+    public async Task<bool> ConfirmCloseAllAsync()
+    {
+        foreach (var doc in Documents.Where(d => d.IsModified).ToList())
+            if (!await ConfirmUnsavedAsync(doc))
+                return false;
+        return true;
+    }
+
+    [RelayCommand] public Task SaveActiveAsync() => ActiveDocument is { } d ? SaveAsync(d, saveAs: false) : Task.CompletedTask;
+    [RelayCommand] public Task SaveActiveAsAsync() => ActiveDocument is { } d ? SaveAsync(d, saveAs: true) : Task.CompletedTask;
+
+    /// <summary>Saves (in place, as an incremental update) or saves a copy under a new name and switches the tab to it.</summary>
+    public async Task<bool> SaveAsync(DocumentViewModel document, bool saveAs)
+    {
+        var path = document.FilePath;
+        if (saveAs)
+        {
+            if (await _shell.PickSavePathAsync(Path.GetFileName(document.FilePath)) is not { } chosen)
+                return false;
+            path = chosen;
+        }
+
+        try
+        {
+            ProgressText = Loc.Get("Saving");
+            await document.Document.SaveAsync(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PdfException or ObjectDisposedException)
+        {
+            await ShowMessageAsync(Loc.Get("SaveFailed"), ex.Message);
+            return false;
+        }
+        finally
+        {
+            ProgressText = null;
+        }
+
+        if (string.Equals(Path.GetFullPath(path), Path.GetFullPath(document.FilePath), StringComparison.OrdinalIgnoreCase))
+        {
+            document.MarkSaved();
+        }
+        else
+        {
+            // Continue in the new file, in the same tab and at the same page.
+            var index = Documents.IndexOf(document);
+            document.SaveViewState(State.GetDocumentState(path));
+            Documents.Remove(document);
+            await document.DisposeAsync();
+            if (await OpenFileAsync(path) is { } reopened && index >= 0 && index < Documents.Count)
+                Documents.Move(Documents.IndexOf(reopened), index);
+        }
+        ShowToast(Loc.Get("Saved"));
+        return true;
     }
 
     public void CycleTabs(int direction)
@@ -469,12 +556,14 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Esc closes the topmost transient UI. Returns false when there was nothing to close.</summary>
     public bool CloseTopmost()
     {
-        if (Dialog is { } d) { d.Secondary(); return true; }
+        if (Dialog is { } d) { d.Dismiss(); return true; }
         if (IsCommandPaletteOpen) { IsCommandPaletteOpen = false; return true; }
         if (IsSettingsOpen) { IsSettingsOpen = false; return true; }
         if (IsToolsPanelOpen) { IsToolsPanelOpen = false; return true; }
-        if (ActiveDocument is { HasSelection: true } doc) { doc.Selection = null; return true; }
+        // Reading mode first: with the chrome hidden, Esc must always get you out.
         if (IsReadingMode) { IsReadingMode = false; return true; }
+        if (ActiveDocument is { HasSelection: true } doc) { doc.Selection = null; return true; }
+        if (Markup.Tool != EditTool.Select) { Markup.Tool = EditTool.Select; return true; }
         if (ReadAloud.IsSpeaking) { ReadAloud.Stop(); return true; }
         return false;
     }
@@ -493,6 +582,13 @@ public sealed partial class MainViewModel : ObservableObject
         return
         [
             new("open", "CmdOpen", "IconFolder", () => _ = OpenDialogAsync(), null, "Ctrl+O"),
+            new("save", "CmdSave", "IconSave", () => _ = SaveActiveAsync(), HasDoc, "Ctrl+S"),
+            new("saveAs", "CmdSaveAs", "IconSave", () => _ = SaveActiveAsAsync(), HasDoc, "Ctrl+Shift+S"),
+            new("undo", "CmdUndo", "IconUndo", () => Doc(d => _ = d.UndoAsync()), () => ActiveDocument?.CanUndo == true, "Ctrl+Z"),
+            new("toolSelect", "CmdToolSelect", "IconSelect", () => Markup.Tool = EditTool.Select, HasDoc),
+            new("toolMarker", "CmdToolMarker", "IconMarker", () => Markup.IsMarker = !Markup.IsMarker, HasDoc, "Ctrl+Shift+H"),
+            new("toolComment", "CmdToolComment", "IconComment", () => Markup.IsComment = !Markup.IsComment, HasDoc, "Ctrl+Shift+M"),
+            new("exit", "CmdExit", "IconClose", () => _shell.CloseWindow()),
             new("close", "CmdClose", "IconClose", () => _ = CloseDocumentAsync(null), HasDoc, "Ctrl+W", "Ctrl+F4"),
             new("nextTab", "CmdNextTab", "IconChevronRight", () => CycleTabs(+1), () => Documents.Count > 1, "Ctrl+Tab"),
             new("prevTab", "CmdPrevTab", "IconChevronLeft", () => CycleTabs(-1), () => Documents.Count > 1, "Ctrl+Shift+Tab"),
@@ -538,6 +634,7 @@ public sealed partial class MainViewModel : ObservableObject
         return
         [
             new("GroupView", Brush("ToolBlueBrush"), [C("thumbnails"), C("outline"), C("readingMode"), C("pageColors"), C("fitWidth"), C("fitPage")]),
+            new("GroupMarkup", Brush("ToolRedBrush"), [C("toolMarker"), C("toolComment"), C("undo"), C("save"), C("saveAs")]),
             new("GroupRead", Brush("ToolPurpleBrush"), [C("find"), C("goto"), C("readAloud"), C("selectAll")]),
             new("GroupDocument", Brush("ToolGreenBrush"), [C("open"), C("print"), C("close")]),
             new("GroupApp", Brush("ToolOrangeBrush"), [C("palette"), C("settings"), C("updates")]),

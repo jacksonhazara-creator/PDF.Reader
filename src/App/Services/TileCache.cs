@@ -3,8 +3,9 @@ using PdfReader.Rendering;
 
 namespace PdfReader.App.Services;
 
-/// <summary>Identifies one rendered bitmap. ScaleKey -1 marks the low-res whole-page preview.</summary>
-public readonly record struct TileKey(long DocumentId, int Page, long ScaleKey, PageColors Colors, int TileX, int TileY);
+/// <summary>Identifies one rendered bitmap. ScaleKey -1 marks the low-res whole-page preview;
+/// Revision changes when the page's annotations are edited.</summary>
+public readonly record struct TileKey(long DocumentId, int Page, long ScaleKey, PageColors Colors, int TileX, int TileY, int Revision = 0);
 
 /// <summary>
 /// LRU cache of rendered tiles shared by all open documents, bounded by memory rather than

@@ -2,7 +2,9 @@
 # for manual testing and the CI startup benchmark. No binary fixtures live in the repo.
 param(
     [string]$Path = "sample.pdf",
-    [int]$Pages = 60
+    [int]$Pages = 60,
+    # Adds a document JavaScript and a 'launch program' link on page 2, to exercise the security banner.
+    [switch]$ActiveContent
 )
 
 $ErrorActionPreference = 'Stop'
@@ -50,6 +52,10 @@ for ($p = 1; $p -le $Pages; $p++) {
         $link = Add-Obj '<< /Type /Annot /Subtype /Link /Rect [40 40 300 60] /Border [0 0 0] /A << /S /URI /URI (https://github.com/) >> >>'
         $annots = " /Annots [$link 0 R]"
     }
+    if ($p -eq 2 -and $ActiveContent) {
+        $launch = Add-Obj '<< /Type /Annot /Subtype /Link /Rect [40 40 300 60] /Border [0 0 0] /A << /S /Launch /F (calc.exe) >> >>'
+        $annots = " /Annots [$launch 0 R]"
+    }
     $pageIds += Add-Obj "<< /Type /Page /Parent $pagesRoot 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 $font 0 R /F2 $fontBold 0 R >> >> /Contents $content 0 R$annots >>"
 }
 Set-Obj $pagesRoot ("<< /Type /Pages /Kids [" + (($pageIds | ForEach-Object { "$_ 0 R" }) -join ' ') + "] /Count $($pageIds.Count) >>")
@@ -62,7 +68,12 @@ for ($i = 0; $i -lt $Pages; $i++) {
     Set-Obj $items[$i] "<< /Title (Chapter $($i + 1)) /Parent $outlines 0 R /Dest [$($pageIds[$i]) 0 R /XYZ 0 792 0]$prev$next >>"
 }
 Set-Obj $outlines "<< /Type /Outlines /First $($items[0]) 0 R /Last $($items[-1]) 0 R /Count $Pages >>"
-Set-Obj $catalog "<< /Type /Catalog /Pages $pagesRoot 0 R /Outlines $outlines 0 R >>"
+$names = ''
+if ($ActiveContent) {
+    $js = Add-Obj '<< /S /JavaScript /JS (app.alert\(1\);) >>'
+    $names = " /Names << /JavaScript << /Names [(test) $js 0 R] >> >>"
+}
+Set-Obj $catalog "<< /Type /Catalog /Pages $pagesRoot 0 R /Outlines $outlines 0 R$names >>"
 
 $out = New-Object System.Text.StringBuilder "%PDF-1.7`n"
 $offsets = @()

@@ -1,6 +1,6 @@
 <Project>
   <!-- Central package versions. Licenses: Avalonia (MIT), CommunityToolkit.Mvvm (MIT),
-       bblanchon.PDFium.Win32 (PDFium: BSD-3-Clause / Apache-2.0), Velopack (MIT), xUnit (Apache-2.0). -->
+       bblanchon.PDFium.Win32 (PDFium: BSD-3-Clause / Apache-2.0), Velopack (MIT), PDFsharp 6.2.x (MIT), xUnit (Apache-2.0). -->
   <ItemGroup>
     <PackageVersion Include="Avalonia" Version="12.1.4" />
     <PackageVersion Include="Avalonia.Desktop" Version="12.1.4" />
@@ -8,6 +8,10 @@
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageVersion Include="bblanchon.PDFium.Win32" Version="158.0.8111" />
     <PackageVersion Include="Velopack" Version="1.2.161" />
+    <!-- PDFsharp: 6.2.x is MIT. From 6.5.0 it is AGPL-3.0, which we must not use. Exact pin; see dependabot.yml. -->
+    <PackageVersion Include="PDFsharp" Version="[6.2.4]" />
+    <!-- PDFsharp brings Pkcs 8.0.1 (known CVEs); pin the patched version. -->
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
 
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />

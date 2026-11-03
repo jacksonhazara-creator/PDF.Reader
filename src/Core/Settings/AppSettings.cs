@@ -24,9 +24,35 @@ public sealed class AppSettings
     /// <summary>#RRGGBB</summary>
     public string CustomBackground { get; set; } = "#26303A";
 
+    // Marker & comments (remembered between sessions)
+    /// <summary>#RRGGBB</summary>
+    public string MarkerColor { get; set; } = "#FFE600";
+    /// <summary>0 = opaque … 0.9 = almost invisible.</summary>
+    public double MarkerTransparency { get; set; } = 0.55;
+    /// <summary>0.2 = pale … 1 = full color.</summary>
+    public double MarkerStrength { get; set; } = 1.0;
+    /// <summary>Pen width in points when drawing.</summary>
+    public double MarkerThickness { get; set; } = 8;
+    public CommentShape CommentShape { get; set; } = CommentShape.Square;
+    /// <summary>#RRGGBB</summary>
+    public string CommentColor { get; set; } = "#FFB020";
+    public bool CommentOnLastWord { get; set; } = true;
+
     // Updates
     public bool CheckForUpdatesOnStartup { get; set; } = true;
     public UpdateChannel UpdateChannel { get; set; } = UpdateChannel.Stable;
+
+    /// <summary>
+    /// Marker color as 0xAARRGGBB: strength fades the color toward white (pale ↔ vivid),
+    /// transparency sets the alpha (how much of the page shows through).
+    /// </summary>
+    public uint ResolveMarkerArgb()
+    {
+        var baseColor = ColorParser.ParseOrDefault(MarkerColor, 0xFFFFE600);
+        var rgb = PageColors.Mix(0xFFFFFFFF, baseColor, Math.Clamp(MarkerStrength, 0.2, 1)) & 0xFFFFFF;
+        var alpha = (uint)Math.Round(255 * (1 - Math.Clamp(MarkerTransparency, 0, 0.9)));
+        return (alpha << 24) | rgb;
+    }
 
     public PageColors ResolvePageColors(PageColorMode? overrideMode = null) => PageColors.For(
         overrideMode ?? PageColorMode,

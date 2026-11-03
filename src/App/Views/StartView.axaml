@@ -17,7 +17,7 @@
       <Border BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="2" CornerRadius="14"
               Background="{DynamicResource SurfaceAltBrush}" Padding="32,44">
         <StackPanel HorizontalAlignment="Center" Spacing="14">
-          <Border Width="64" Height="64" CornerRadius="16" Background="{DynamicResource SystemAccentColor}" HorizontalAlignment="Center">
+          <Border Width="64" Height="64" CornerRadius="16" Background="{StaticResource LogoBrush}" HorizontalAlignment="Center">
             <c:Icon Data="{StaticResource IconFile}" Width="34" Height="34" Foreground="White" StrokeThickness="1.8" />
           </Border>
           <TextBlock Classes="title" Text="{l:Tr AppName}" HorizontalAlignment="Center" />

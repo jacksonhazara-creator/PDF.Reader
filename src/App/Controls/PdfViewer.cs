@@ -52,6 +52,7 @@ public sealed class PdfViewer : UserControl
     private bool _updateQueued;
     private bool _firstPageReported;
     private Size _lastViewport;
+    private DispatcherTimer? _refitTimer;
 
     // Selection / hover state
     private bool _selecting;
@@ -88,6 +89,7 @@ public sealed class PdfViewer : UserControl
         _canvas.PointerMoved += OnPointerMoved;
         _canvas.PointerReleased += OnPointerReleased;
         _canvas.PointerExited += (_, _) => _canvas.Cursor = Cursor.Default;
+        _overlay.Children.Add(_commentEditor);
     }
 
     /// <summary>Raised once, when the first screenful of pages is fully sharp (used for startup benchmarks).</summary>
@@ -124,6 +126,8 @@ public sealed class PdfViewer : UserControl
             _vm.PropertyChanged -= OnViewModelPropertyChanged;
             _vm.ViewerRequested -= OnViewerRequested;
             _vm.HighlightsChanged -= OnHighlightsChanged;
+            _vm.PageContentChanged -= OnPageContentChanged;
+            _vm.CommentsChanged -= OnHighlightsChanged;
             CancelAllPending();
         }
 
@@ -133,12 +137,16 @@ public sealed class PdfViewer : UserControl
         _configHasTiles = false;
         _firstPageReported = false;
         HideSelectionPopup();
+        HideCommentCard(force: true);
+        HideCommentEditor();
 
         if (vm is not null)
         {
             vm.PropertyChanged += OnViewModelPropertyChanged;
             vm.ViewerRequested += OnViewerRequested;
             vm.HighlightsChanged += OnHighlightsChanged;
+            vm.PageContentChanged += OnPageContentChanged;
+            vm.CommentsChanged += OnHighlightsChanged;
             _zoom = Math.Clamp(vm.Zoom, MinZoom, MaxZoom);
             _restorePending = true;
             TryRestore();
@@ -157,13 +165,22 @@ public sealed class PdfViewer : UserControl
                 break;
             case nameof(DocumentViewModel.Selection):
                 if (_vm?.Selection is null)
+                {
                     HideSelectionPopup();
+                    HideCommentEditor();
+                }
                 _canvas.InvalidateVisual();
                 break;
         }
     }
 
     private void OnHighlightsChanged() => _canvas.InvalidateVisual();
+
+    private void OnPageContentChanged(int page)
+    {
+        ScheduleUpdate();
+        _canvas.InvalidateVisual();
+    }
 
     private void OnViewerRequested(ViewerRequest request)
     {
@@ -207,10 +224,20 @@ public sealed class PdfViewer : UserControl
             return;
         var widthChanged = Math.Abs(viewport.Width - _lastViewport.Width) > 0.5;
         _lastViewport = viewport;
+        Relayout(keepPosition: true);
         if (_vm.ZoomMode is ZoomMode.FitWidth or ZoomMode.FitPage && (widthChanged || _vm.ZoomMode == ZoomMode.FitPage))
-            SetZoom(ZoomForMode(_vm.ZoomMode), null, _vm.ZoomMode, force: true);
-        else
-            Relayout(keepPosition: true);
+        {
+            // While a side panel animates, the size changes every frame: shift the pages now and
+            // re-fit once it settles, instead of re-rendering at a new zoom on every frame.
+            _refitTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(90), DispatcherPriority.Background, (_, _) =>
+            {
+                _refitTimer!.Stop();
+                if (_vm is { ZoomMode: ZoomMode.FitWidth or ZoomMode.FitPage } v)
+                    SetZoom(ZoomForMode(v.ZoomMode), null, v.ZoomMode, force: true);
+            });
+            _refitTimer.Stop();
+            _refitTimer.Start();
+        }
     }
 
     /// <summary>Applies the saved zoom and scroll position once the viewport size is known.</summary>
@@ -436,7 +463,7 @@ public sealed class PdfViewer : UserControl
         }, DispatcherPriority.Background);
     }
 
-    private TileKey PreviewKey(int page) => new(_vm!.Id, page, -1, _config.Colors, 0, 0);
+    private TileKey PreviewKey(int page) => new(_vm!.Id, page, -1, _config.Colors, 0, 0, _vm.RevisionOf(page));
 
     private void UpdateRequests()
     {
@@ -593,7 +620,7 @@ public sealed class PdfViewer : UserControl
                 var py = ty * TileSize;
                 var w = Math.Min(TileSize, pw - px);
                 var h = Math.Min(TileSize, ph - py);
-                var key = new TileKey(_vm.Id, page, config.ScaleKey, config.Colors, tx, ty);
+                var key = new TileKey(_vm.Id, page, config.ScaleKey, config.Colors, tx, ty, _vm.RevisionOf(page));
                 var docRect = new Rect(r.X + px * toDip, r.Y + py * toDip, w * toDip, h * toDip);
                 yield return (key, new RenderRequest(page, config.Scale, px, py, w, h, config.Colors), docRect);
             }
@@ -660,6 +687,7 @@ public sealed class PdfViewer : UserControl
         var selectionBrush = new SolidColorBrush(Color.FromArgb(0x55, 0x33, 0x88, 0xFF));
         var dip = DipPerPoint;
         var (first, last) = PagesIntersecting(vp);
+        var missing = 0;
 
         for (var page = first; page <= last; page++)
         {
@@ -668,12 +696,13 @@ public sealed class PdfViewer : UserControl
 
             using (ctx.PushClip(r))
             {
-                if (_cache.Get(PreviewKey(page)) is { } preview)
+                var previewKey = PreviewKey(page);
+                if ((_cache.Get(previewKey) ?? _cache.Get(previewKey with { Revision = previewKey.Revision - 1 })) is { } preview)
                     ctx.DrawImage(preview, new Rect(preview.Size), r);
 
                 if (_fallback is { } fallback)
                     DrawTiles(ctx, page, fallback, vp, onlyCached: true);
-                DrawTiles(ctx, page, _config, vp, onlyCached: false);
+                missing += DrawTiles(ctx, page, _config, vp, onlyCached: false);
             }
 
             // Search highlights
@@ -692,45 +721,136 @@ public sealed class PdfViewer : UserControl
             if (_vm.Selection is { PageIndex: var selPage } selection && selPage == page)
                 foreach (var rect in selection.Rects)
                     ctx.FillRectangle(selectionBrush, ToDoc(r, rect, dip));
+
+            DrawEditOverlays(ctx, page, r, dip);
+        }
+
+        TrackBlur(missing);
+    }
+
+    private long _blurrySince;
+
+    /// <summary>Diagnostics: how long the viewport showed placeholders instead of sharp tiles.</summary>
+    private void TrackBlur(int missingTiles)
+    {
+        if (!PerfLog.Enabled)
+            return;
+        if (missingTiles > 0 && _blurrySince == 0)
+            _blurrySince = System.Diagnostics.Stopwatch.GetTimestamp();
+        else if (missingTiles == 0 && _blurrySince != 0)
+        {
+            PerfLog.Blurry(System.Diagnostics.Stopwatch.GetElapsedTime(_blurrySince).TotalMilliseconds);
+            _blurrySince = 0;
         }
     }
 
-    private void DrawTiles(DrawingContext ctx, int page, RenderConfig config, Rect vp, bool onlyCached)
+    /// <returns>Number of tiles not yet rendered.</returns>
+    private int DrawTiles(DrawingContext ctx, int page, RenderConfig config, Rect vp, bool onlyCached)
     {
+        var missing = 0;
         foreach (var (key, _, docRect) in TilesFor(page, config, vp))
         {
             if (_cache.Get(key, touch: !onlyCached) is { } bitmap)
+            {
                 ctx.DrawImage(bitmap, new Rect(bitmap.Size), docRect);
+                continue;
+            }
+            missing++;
+            // Just edited: keep showing the previous version until the new tile arrives (no flash).
+            if (!onlyCached && _cache.Get(key with { Revision = key.Revision - 1 }, touch: false) is { } previous)
+                ctx.DrawImage(previous, new Rect(previous.Size), docRect);
         }
+        return missing;
     }
 
     private static Rect ToDoc(Rect page, PdfRect rect, double dip)
         => new(page.X + rect.X * dip, page.Y + rect.Y * dip, rect.Width * dip, rect.Height * dip);
 
     // ---------------------------------------------------------------------------------------
-    // Pointer: selection, links, hover cursor
+    // Pointer: tools (select / marker / comment), links, comment markers, hover
     // ---------------------------------------------------------------------------------------
+
+    private enum DragMode { None, Text, PendingMarker, Draw }
+
+    private DragMode _drag;
+    private bool _textDragIsMarker;
+    private readonly List<PdfPoint> _inkPoints = [];
+    private static readonly Cursor CrossCursor = new(StandardCursorType.Cross);
+
+    private MarkupViewModel? Markup => _vm?.Main.Markup;
+    private EditTool Tool => Markup?.Tool ?? EditTool.Select;
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (_vm is null || !e.GetCurrentPoint(_canvas).Properties.IsLeftButtonPressed)
+        if (_vm is not { } vm || !e.GetCurrentPoint(_canvas).Properties.IsLeftButtonPressed)
             return;
         _canvas.Focus();
         var point = e.GetPosition(_canvas);
         _pressPoint = point;
-        var page = PageAt(point);
+
+        if (CommentAt(point) is { } comment)
+        {
+            ShowCommentCard(comment, pinned: true);
+            e.Handled = true;
+            return;
+        }
+        HideCommentCard(force: true);
         HideSelectionPopup();
-        _vm.Selection = null;
+        HideCommentEditor();
+        vm.Selection = null;
+
+        var page = PageAt(point);
         if (page < 0)
             return;
-
-        _selecting = true;
         _selectionPage = page;
         _anchorChar = -1;
         e.Pointer.Capture(_canvas);
         var pt = ToPagePoints(page, point);
-        _ = SetAnchorAsync(page, pt);
+
+        if (Tool == EditTool.Marker)
+        {
+            // On text: mark the text. Anywhere else (images, margins): draw freehand.
+            _drag = DragMode.PendingMarker;
+            _inkPoints.Clear();
+            _inkPoints.Add(new PdfPoint(pt.X, pt.Y));
+            _ = DecideMarkerModeAsync(page, pt);
+        }
+        else
+        {
+            _drag = DragMode.Text;
+            _textDragIsMarker = false;
+            _selecting = true;
+            _ = SetAnchorAsync(page, pt);
+        }
         e.Handled = true;
+    }
+
+    private async Task DecideMarkerModeAsync(int page, Point pt)
+    {
+        try
+        {
+            var index = await _vm!.Document.GetCharIndexAtAsync(page, pt.X, pt.Y, tolerance: 2);
+            if (_drag != DragMode.PendingMarker)
+                return;
+            if (index >= 0)
+            {
+                _drag = DragMode.Text;
+                _textDragIsMarker = true;
+                _selecting = true;
+                _anchorChar = index;
+                _inkPoints.Clear();
+                if (_pendingDragPoint is null && _lastMovePoint is { } last)
+                    _pendingDragPoint = last;
+                if (!_dragQueryInFlight)
+                    _ = UpdateDragSelectionAsync();
+            }
+            else
+            {
+                _drag = DragMode.Draw;
+            }
+            _canvas.InvalidateVisual();
+        }
+        catch (Exception ex) when (ex is PdfException or ObjectDisposedException) { _drag = DragMode.Draw; }
     }
 
     private async Task SetAnchorAsync(int page, Point pt)
@@ -742,23 +862,44 @@ public sealed class PdfViewer : UserControl
         catch (Exception ex) when (ex is PdfException or ObjectDisposedException) { }
     }
 
+    private Point? _lastMovePoint;
+
     private void OnPointerMoved(object? sender, PointerEventArgs e)
     {
         if (_vm is null)
             return;
         var point = e.GetPosition(_canvas);
-        if (_selecting)
+        _lastMovePoint = point;
+        switch (_drag)
         {
-            _pendingDragPoint = point;
-            if (!_dragQueryInFlight)
-                _ = UpdateDragSelectionAsync();
+            case DragMode.Text when _selecting:
+                _pendingDragPoint = point;
+                if (!_dragQueryInFlight)
+                    _ = UpdateDragSelectionAsync();
+                return;
+            case DragMode.PendingMarker or DragMode.Draw:
+                var pt = ClampToPage(_selectionPage, point);
+                var lastPt = _inkPoints[^1];
+                if (Math.Abs(pt.X - lastPt.X) + Math.Abs(pt.Y - lastPt.Y) > 0.6)
+                {
+                    _inkPoints.Add(new PdfPoint(pt.X, pt.Y));
+                    _canvas.InvalidateVisual();
+                }
+                return;
         }
-        else
+
+        // Hovering: comment markers first (instant, from cache), then links (async).
+        if (CommentAt(point) is { } comment)
         {
-            _pendingHoverPoint = point;
-            if (!_hoverQueryInFlight)
-                _ = UpdateHoverAsync();
+            _canvas.Cursor = HandCursor;
+            ToolTip.SetTip(_canvas, null);
+            ShowCommentCard(comment, pinned: false);
+            return;
         }
+        HideCommentCard(force: false);
+        _pendingHoverPoint = point;
+        if (!_hoverQueryInFlight)
+            _ = UpdateHoverAsync();
     }
 
     private async Task UpdateDragSelectionAsync()
@@ -819,8 +960,8 @@ public sealed class PdfViewer : UserControl
                     continue;
                 }
                 var pt = ToPagePoints(page, point);
-                var link = await vm.Document.GetLinkAtAsync(page, pt.X, pt.Y);
-                _canvas.Cursor = link is null ? IBeamCursor : HandCursor;
+                var link = Tool == EditTool.Marker ? null : await vm.Document.GetLinkAtAsync(page, pt.X, pt.Y);
+                _canvas.Cursor = Tool == EditTool.Marker ? CrossCursor : link is null ? IBeamCursor : HandCursor;
                 ToolTip.SetTip(_canvas, link?.Kind switch
                 {
                     LinkKind.Uri => link.Target,
@@ -836,22 +977,47 @@ public sealed class PdfViewer : UserControl
         }
     }
 
-    private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
+    private async void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (_vm is not { } vm || !_selecting)
+        if (_vm is not { } vm || _drag == DragMode.None)
             return;
-        _selecting = false;
+        var mode = _drag;
+        _drag = DragMode.None;
         e.Pointer.Capture(null);
         var point = e.GetPosition(_canvas);
         var isClick = Math.Abs(point.X - _pressPoint.X) < 4 && Math.Abs(point.Y - _pressPoint.Y) < 4;
-        if (isClick)
+
+        if (mode is DragMode.PendingMarker or DragMode.Draw)
+        {
+            var points = _inkPoints.ToList();
+            _inkPoints.Clear();
+            _canvas.InvalidateVisual();
+            if (!isClick && points.Count >= 2)
+                await vm.DrawAsync(_selectionPage, points);
+            return;
+        }
+
+        // Text drag (select, comment, or marker over text)
+        _selecting = false;
+        if (isClick && !_textDragIsMarker)
         {
             vm.Selection = null;
             _ = ActivateLinkAtAsync(_selectionPage, ToPagePoints(_selectionPage, point));
             return;
         }
-        // Let the last drag query land before showing the popup.
-        Dispatcher.UIThread.Post(ShowSelectionPopup, DispatcherPriority.Background);
+
+        // Let the last selection query land.
+        while (_dragQueryInFlight)
+            await Task.Delay(10);
+        if (vm.Selection is not { IsEmpty: false } selection)
+            return;
+
+        if (_textDragIsMarker)
+            await vm.HighlightAsync(selection);
+        else if (Tool == EditTool.Comment)
+            ShowCommentEditor();
+        else
+            ShowSelectionPopup();
     }
 
     private async Task ActivateLinkAtAsync(int page, Point pt)
@@ -865,30 +1031,81 @@ public sealed class PdfViewer : UserControl
     }
 
     // ---------------------------------------------------------------------------------------
-    // Selection popup (Copy, Read aloud)
+    // Edit overlays: live marker stroke, hovered comment's text
     // ---------------------------------------------------------------------------------------
+
+    private void DrawEditOverlays(DrawingContext ctx, int page, Rect pageRect, double dip)
+    {
+        _ = _vm!.CommentsOn(page); // loads comments for visible pages (for hover)
+
+        if (_drag is DragMode.Draw or DragMode.PendingMarker && page == _selectionPage && _inkPoints.Count > 1 && Markup is { } m)
+        {
+            var geometry = new StreamGeometry();
+            using (var g = geometry.Open())
+            {
+                g.BeginFigure(new Point(pageRect.X + _inkPoints[0].X * dip, pageRect.Y + _inkPoints[0].Y * dip), false);
+                foreach (var p in _inkPoints.Skip(1))
+                    g.LineTo(new Point(pageRect.X + p.X * dip, pageRect.Y + p.Y * dip));
+                g.EndFigure(false);
+            }
+            var pen = new Pen(new SolidColorBrush(Color.FromUInt32(m.MarkerArgb)), m.MarkerThickness * dip, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+            ctx.DrawGeometry(null, pen, geometry);
+        }
+
+        if (_cardComment is { } c && c.PageIndex == page)
+        {
+            var outline = new Pen(new SolidColorBrush(Color.FromUInt32(c.Color)), 1.5, dashStyle: DashStyle.Dash);
+            var fill = new SolidColorBrush(Color.FromUInt32((c.Color & 0xFFFFFF) | 0x30000000));
+            foreach (var rect in c.TextRects)
+                ctx.DrawRectangle(fill, outline, ToDoc(pageRect, rect, dip).Inflate(1.5), 2, 2);
+        }
+    }
+
+    /// <summary>The comment marker at (or very near) a document point.</summary>
+    private PdfComment? CommentAt(Point docPoint)
+    {
+        if (_vm is null || _pageRects.Length == 0)
+            return null;
+        var page = PageNearest(docPoint.Y);
+        if (page < 0)
+            return null;
+        var dip = DipPerPoint;
+        foreach (var candidate in new[] { page, page - 1, page + 1 })
+        {
+            if ((uint)candidate >= (uint)_pageRects.Length || _vm.CommentsOn(candidate) is not { } comments)
+                continue;
+            foreach (var c in comments)
+                if (ToDoc(_pageRects[candidate], c.Marker, dip).Inflate(6).Contains(docPoint))
+                    return c;
+        }
+        return null;
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Popups: selection actions, comment card, comment editor
+    // ---------------------------------------------------------------------------------------
+
+    private Button PopupButton(string iconKey, string textKey, Action onClick)
+    {
+        var icon = new Icon { Width = 16, Height = 16 };
+        icon.Bind(Icon.DataProperty, this.GetResourceObservable(iconKey));
+        var button = new Button
+        {
+            Classes = { "popup" },
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                Children = { icon, new TextBlock { Text = Loc.Get(textKey), VerticalAlignment = VerticalAlignment.Center } },
+            },
+        };
+        Avalonia.Automation.AutomationProperties.SetName(button, Loc.Get(textKey));
+        button.Click += (_, _) => onClick();
+        return button;
+    }
 
     private Border BuildSelectionPopup()
     {
-        Button Item(string iconKey, string textKey, Action onClick)
-        {
-            var icon = new Icon { Width = 16, Height = 16 };
-            icon.Bind(Icon.DataProperty, this.GetResourceObservable(iconKey));
-            var button = new Button
-            {
-                Classes = { "popup" },
-                Content = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 6,
-                    Children = { icon, new TextBlock { Text = Loc.Get(textKey), VerticalAlignment = VerticalAlignment.Center } },
-                },
-            };
-            ToolTip.SetTip(button, Loc.Get(textKey));
-            button.Click += (_, _) => { onClick(); HideSelectionPopup(); };
-            return button;
-        }
-
         return new Border
         {
             Classes = { "floating" },
@@ -900,8 +1117,10 @@ public sealed class PdfViewer : UserControl
                 Spacing = 2,
                 Children =
                 {
-                    Item("IconCopy", "Copy", () => _ = _vm?.CopySelectionAsync()),
-                    Item("IconSpeaker", "ReadAloud", () => _vm?.ReadSelection()),
+                    PopupButton("IconCopy", "Copy", () => { _ = _vm?.CopySelectionAsync(); HideSelectionPopup(); }),
+                    PopupButton("IconMarker", "Highlight", () => { if (_vm?.Selection is { } s) _ = _vm.HighlightAsync(s); HideSelectionPopup(); }),
+                    PopupButton("IconComment", "Comment", () => { HideSelectionPopup(); ShowCommentEditor(); }),
+                    PopupButton("IconSpeaker", "ReadAloud", () => { _vm?.ReadSelection(); HideSelectionPopup(); }),
                 },
             },
         };
@@ -919,19 +1138,184 @@ public sealed class PdfViewer : UserControl
 
     private void PositionSelectionPopup()
     {
-        if (!_selectionPopup.IsVisible || _vm?.Selection is not { Rects.Count: > 0 } selection
+        PositionNearSelection(_selectionPopup);
+        PositionNearSelection(_commentEditor);
+        if (_cardComment is { } c)
+            PositionCard(c);
+    }
+
+    private void PositionNearSelection(Border popup)
+    {
+        if (!popup.IsVisible || _vm?.Selection is not { Rects.Count: > 0 } selection
             || (uint)selection.PageIndex >= (uint)_pageRects.Length)
             return;
         var page = _pageRects[selection.PageIndex];
         var last = ToDoc(page, selection.Rects[^1], DipPerPoint);
-        _selectionPopup.Measure(Size.Infinity);
-        var size = _selectionPopup.DesiredSize;
+        popup.Measure(Size.Infinity);
+        var size = popup.DesiredSize;
         var x = Math.Clamp(last.Right - _scroll.Offset.X - size.Width / 2, 8, Math.Max(8, Bounds.Width - size.Width - 8));
         var y = last.Bottom - _scroll.Offset.Y + 8;
         if (y + size.Height > Bounds.Height - 8)
-            y = last.Top - _scroll.Offset.Y - size.Height - 8;
-        Canvas.SetLeft(_selectionPopup, x);
-        Canvas.SetTop(_selectionPopup, y);
+            y = Math.Max(8, last.Top - _scroll.Offset.Y - size.Height - 8);
+        Canvas.SetLeft(popup, x);
+        Canvas.SetTop(popup, y);
+    }
+
+    // --- Comment card (hover: date, text, quoted words; click: pinned with Delete) ----------------
+
+    private Border? _card;
+    private TextBlock? _cardDate, _cardText, _cardQuote;
+    private Button? _cardDelete;
+    private PdfComment? _cardComment;
+    private bool _cardPinned;
+
+    private Border Card()
+    {
+        if (_card is not null)
+            return _card;
+        _cardDate = new TextBlock { FontSize = 10.5, Classes = { "secondary" } };
+        _cardText = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 280, Margin = new Thickness(0, 3, 0, 0) };
+        _cardQuote = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 280, FontStyle = FontStyle.Italic, FontSize = 11.5, Classes = { "secondary" }, Margin = new Thickness(0, 6, 0, 0) };
+        _cardDelete = PopupButton("IconTrash", "Delete", () =>
+        {
+            if (_cardComment is { } c && _vm is { } vm)
+                _ = vm.DeleteCommentAsync(c);
+            HideCommentCard(force: true);
+        });
+        _cardDelete.HorizontalAlignment = HorizontalAlignment.Right;
+        _cardDelete.Margin = new Thickness(0, 6, 0, 0);
+        _card = new Border
+        {
+            Classes = { "floating" },
+            Padding = new Thickness(12, 8),
+            IsVisible = false,
+            Child = new StackPanel { Children = { _cardDate, _cardText, _cardQuote, _cardDelete } },
+        };
+        _overlay.Children.Add(_card);
+        return _card;
+    }
+
+    private void ShowCommentCard(PdfComment comment, bool pinned)
+    {
+        if (_cardPinned && !pinned && _cardComment?.Id != comment.Id)
+            return;
+        var card = Card();
+        _cardComment = comment;
+        _cardPinned = pinned || (_cardPinned && _cardComment?.Id == comment.Id);
+        _cardDate!.Text = comment.CreatedUtc == DateTime.MinValue ? "" : comment.CreatedUtc.ToLocalTime().ToString("g", System.Globalization.CultureInfo.CurrentCulture);
+        _cardText!.Text = comment.Text;
+        _cardQuote!.Text = comment.Quote.Length == 0 ? "" : Loc.Format("CommentOn", comment.Quote.Length > 120 ? comment.Quote[..120] + "…" : comment.Quote);
+        _cardQuote.IsVisible = comment.Quote.Length > 0;
+        _cardDelete!.IsVisible = _cardPinned;
+        card.IsVisible = true;
+        PositionCard(comment);
+        _canvas.InvalidateVisual();
+    }
+
+    private void PositionCard(PdfComment comment)
+    {
+        if (_card is not { IsVisible: true } card || (uint)comment.PageIndex >= (uint)_pageRects.Length)
+            return;
+        var marker = ToDoc(_pageRects[comment.PageIndex], comment.Marker, DipPerPoint);
+        card.Measure(Size.Infinity);
+        var size = card.DesiredSize;
+        var x = Math.Clamp(marker.Right - _scroll.Offset.X + 6, 8, Math.Max(8, Bounds.Width - size.Width - 8));
+        var y = marker.Bottom - _scroll.Offset.Y + 4;
+        if (y + size.Height > Bounds.Height - 8)
+            y = Math.Max(8, marker.Top - _scroll.Offset.Y - size.Height - 4);
+        Canvas.SetLeft(card, x);
+        Canvas.SetTop(card, y);
+    }
+
+    private void HideCommentCard(bool force)
+    {
+        if (_card is null || (_cardPinned && !force))
+            return;
+        var wasVisible = _card.IsVisible;
+        _card.IsVisible = false;
+        _cardComment = null;
+        _cardPinned = false;
+        if (wasVisible)
+            _canvas.InvalidateVisual();
+    }
+
+    // --- Comment editor -------------------------------------------------------------------
+
+    private Border _commentEditor = new() { IsVisible = false };
+    private TextBox? _commentBox;
+    private TextBlock? _commentQuote;
+    private Icon? _commentShapeIcon;
+
+    private void EnsureCommentEditor()
+    {
+        if (_commentBox is not null)
+            return;
+        _commentBox = new TextBox
+        {
+            Width = 280,
+            Height = 76,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            PlaceholderText = Loc.Get("CommentPlaceholder"),
+        };
+        Avalonia.Automation.AutomationProperties.SetName(_commentBox, Loc.Get("CommentPlaceholder"));
+        _commentBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter && (e.KeyModifiers & KeyModifiers.Control) != 0)
+            {
+                CommitComment();
+                e.Handled = true;
+            }
+        };
+        _commentQuote = new TextBlock { Classes = { "secondary" }, FontStyle = FontStyle.Italic, MaxWidth = 280, TextTrimming = TextTrimming.CharacterEllipsis };
+        _commentShapeIcon = new Icon { Width = 18, Height = 18, StrokeThickness = 2.2 };
+        var cancel = new Button { Content = Loc.Get("Cancel"), MinWidth = 80 };
+        cancel.Click += (_, _) => HideCommentEditor();
+        var add = new Button { Content = Loc.Get("AddComment"), Classes = { "primary" }, MinWidth = 80, Padding = new Thickness(12, 6) };
+        add.Click += (_, _) => CommitComment();
+        _commentEditor = new Border
+        {
+            Classes = { "floating" },
+            Padding = new Thickness(12, 10),
+            IsVisible = false,
+            Child = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { _commentShapeIcon, new TextBlock { Text = Loc.Get("Comment"), FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center } } },
+                    _commentQuote,
+                    _commentBox,
+                    new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right, Children = { cancel, add } },
+                },
+            },
+        };
+        _overlay.Children.Add(_commentEditor);
+    }
+
+    private void ShowCommentEditor()
+    {
+        if (_vm?.Selection is not { IsEmpty: false } selection || Markup is not { } m)
+            return;
+        EnsureCommentEditor();
+        _commentBox!.Text = "";
+        _commentQuote!.Text = Loc.Format("CommentOn", selection.Text.Trim().Length > 60 ? selection.Text.Trim()[..60] + "…" : selection.Text.Trim());
+        _commentShapeIcon!.Data = m.ShapeIcon;
+        _commentShapeIcon.Foreground = m.CommentBrush;
+        _commentEditor.IsVisible = true;
+        PositionNearSelection(_commentEditor);
+        Dispatcher.UIThread.Post(() => _commentBox.Focus(), DispatcherPriority.Input);
+    }
+
+    private void HideCommentEditor() => _commentEditor.IsVisible = false;
+
+    private void CommitComment()
+    {
+        if (_vm is not { } vm || vm.Selection is not { IsEmpty: false } selection || string.IsNullOrWhiteSpace(_commentBox?.Text))
+            return;
+        var text = _commentBox.Text;
+        HideCommentEditor();
+        _ = vm.AddCommentAsync(selection, text);
     }
 
     /// <summary>The scrollable surface. Draws only what intersects the viewport.</summary>

@@ -13,6 +13,7 @@
                  KeyDown="OnInputKeyDown" />
         <TextBlock Text="{Binding ErrorText}" IsVisible="{Binding HasError}" Foreground="{DynamicResource SystemErrorTextColor}" TextWrapping="Wrap" />
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,6,0,0">
+          <Button Content="{Binding TertiaryText}" IsVisible="{Binding HasTertiary}" Command="{Binding TertiaryCommand}" MinWidth="96" />
           <Button Content="{Binding SecondaryText}" IsVisible="{Binding HasSecondary}" Command="{Binding SecondaryCommand}" MinWidth="96" />
           <Button x:Name="PrimaryButton" Classes="primary" Content="{Binding PrimaryText}" Command="{Binding PrimaryCommand}" MinWidth="96" IsDefault="True" />
         </StackPanel>

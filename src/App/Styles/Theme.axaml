@@ -43,6 +43,11 @@
   <SolidColorBrush x:Key="ToolRedBrush" Color="#D9363E" />
   <SolidColorBrush x:Key="ToolTealBrush" Color="#0E9AA7" />
 
+  <LinearGradientBrush x:Key="LogoBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+    <GradientStop Offset="0" Color="#F0484E" />
+    <GradientStop Offset="1" Color="#B8222A" />
+  </LinearGradientBrush>
+
   <BoxShadows x:Key="FloatingShadow">0 8 24 0 #33000000</BoxShadows>
   <BoxShadows x:Key="SoftShadow">0 2 8 0 #22000000</BoxShadows>
   <CornerRadius x:Key="ControlRadius">6</CornerRadius>

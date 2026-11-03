@@ -18,7 +18,8 @@ public sealed partial class PdfDocument : IAsyncDisposable
     private const int MaxOutlineDepth = 32;
 
     private readonly PdfEngine _engine;
-    private readonly Stream _stream;
+    private Stream _stream;
+    private string? _password; // kept in memory only, to reopen after saving in place
     private readonly Dictionary<int, PageHandle> _pages = new();
     private readonly LinkedList<int> _pageLru = new();
     private IntPtr _document;
@@ -92,6 +93,7 @@ public sealed partial class PdfDocument : IAsyncDisposable
 
     private unsafe void OpenCore(string? password)
     {
+        _password = password;
         if (_stream.Length is 0 or > uint.MaxValue)
             throw new PdfException(PdfError.InvalidFormat, _stream.Length == 0 ? "The file is empty." : "Files larger than 4 GB are not supported.");
 

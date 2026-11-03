@@ -7,6 +7,10 @@ updates:
     groups:
       avalonia:
         patterns: ["Avalonia*"]
+    ignore:
+      # PDFsharp 6.5+ is AGPL-3.0. Stay on the MIT-licensed 6.2.x line.
+      - dependency-name: "PDFsharp"
+        versions: [">= 6.3.0"]
   - package-ecosystem: github-actions
     directory: "/"
     schedule:

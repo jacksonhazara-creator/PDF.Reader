@@ -15,6 +15,15 @@ public sealed class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            // Icon-only buttons get their tooltip as accessible name (screen readers, UI automation).
+            Avalonia.Controls.Control.LoadedEvent.AddClassHandler<Avalonia.Controls.Button>((button, _) =>
+            {
+                if (string.IsNullOrEmpty(Avalonia.Automation.AutomationProperties.GetName(button))
+                    && button.Content is not string
+                    && Avalonia.Controls.ToolTip.GetTip(button) is string tip)
+                    Avalonia.Automation.AutomationProperties.SetName(button, tip);
+            });
+
             var options = StartupOptions.Parse(desktop.Args ?? []);
             // Benchmarks must not touch the user's settings, recent files or session.
             var store = options.BenchmarkOutput is null

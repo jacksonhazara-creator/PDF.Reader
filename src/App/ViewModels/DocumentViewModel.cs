@@ -34,6 +34,7 @@ public sealed partial class DocumentViewModel : ObservableObject, IAsyncDisposab
         ColorOverride = state.PageColorOverride;
         IsSidebarOpen = main.State.SidebarVisible;
         Security = document.Security;
+        _revisions = new int[document.PageCount];
         UpdateSecurityBanner();
     }
 
@@ -41,6 +42,9 @@ public sealed partial class DocumentViewModel : ObservableObject, IAsyncDisposab
     public PdfDocument Document { get; }
     public string FilePath { get; }
     public string Title => Path.GetFileName(FilePath);
+
+    /// <summary>Used as the accessible name of list items (tabs).</summary>
+    public override string ToString() => Title;
     public int PageCount => Document.PageCount;
     public MainViewModel Main => _main;
 
@@ -350,6 +354,142 @@ public sealed partial class DocumentViewModel : ObservableObject, IAsyncDisposab
 
     public Task ActivateLinkAsync(PdfLink link) => _main.ActivateLinkAsync(this, link);
 
+    // --- Editing: marker, drawing, comments ---------------------------------------------------
+
+    private readonly Stack<(int Page, string Id)> _undo = new();
+    private readonly int[] _revisions;
+    private readonly Dictionary<int, IReadOnlyList<PdfComment>> _comments = new();
+    private readonly HashSet<int> _commentsLoading = new();
+
+    [ObservableProperty] public partial bool IsModified { get; set; }
+
+    /// <summary>Tab text; a dot marks unsaved changes.</summary>
+    public string TabTitle => IsModified ? "● " + Title : Title;
+    partial void OnIsModifiedChanged(bool value) => OnPropertyChanged(nameof(TabTitle));
+
+    public bool CanUndo => _undo.Count > 0;
+
+    /// <summary>Bumped whenever a page's annotations change, so the viewer re-renders it.</summary>
+    public int RevisionOf(int page) => (uint)page < (uint)_revisions.Length ? _revisions[page] : 0;
+
+    public event Action<int>? PageContentChanged;
+    public event Action? CommentsChanged;
+
+    /// <summary>Comments on a page, or null while they are loading (the viewer asks again on CommentsChanged).</summary>
+    public IReadOnlyList<PdfComment>? CommentsOn(int page)
+    {
+        if (_comments.TryGetValue(page, out var list))
+            return list;
+        if (_commentsLoading.Add(page))
+            _ = LoadCommentsAsync(page);
+        return null;
+    }
+
+    private async Task LoadCommentsAsync(int page)
+    {
+        try
+        {
+            _comments[page] = await Document.GetCommentsAsync(page);
+            CommentsChanged?.Invoke();
+        }
+        catch (Exception ex) when (ex is PdfException or ObjectDisposedException)
+        {
+            _comments[page] = [];
+        }
+        finally
+        {
+            _commentsLoading.Remove(page);
+        }
+    }
+
+    public Task HighlightAsync(TextSelection selection) => EditAsync(selection.PageIndex, async () =>
+    {
+        if (selection.IsEmpty || selection.Rects.Count == 0)
+            return null;
+        Selection = null;
+        return await Document.AddHighlightAsync(selection.PageIndex, selection.Rects, _main.Settings.ResolveMarkerArgb());
+    });
+
+    public Task DrawAsync(int page, IReadOnlyList<PdfPoint> points) => EditAsync(page, async () =>
+    {
+        if (points.Count < 2)
+            return null;
+        var s = _main.Settings;
+        return await Document.AddInkAsync(page, [points], s.ResolveMarkerArgb(), s.MarkerThickness);
+    });
+
+    /// <summary>Adds a comment marker next to the first or last word of the selection.</summary>
+    public Task AddCommentAsync(TextSelection selection, string text) => EditAsync(selection.PageIndex, async () =>
+    {
+        if (selection.Rects.Count == 0 || string.IsNullOrWhiteSpace(text))
+            return null;
+        var s = _main.Settings;
+        const double size = 16;
+        var onLast = s.CommentOnLastWord;
+        var word = onLast ? selection.Rects[^1] : selection.Rects[0];
+        var pageSize = Document.PageSizes[selection.PageIndex];
+        var x = Math.Clamp(onLast ? word.Right + 1 : word.X - size - 1, 0, pageSize.Width - size);
+        var y = Math.Clamp(word.Y - size * 0.55, 0, pageSize.Height - size);
+        Selection = null;
+        return await Document.AddCommentAsync(selection.PageIndex, new PdfRect(x, y, size, size), text.Trim(), selection.Text.Trim(),
+            selection.Rects, s.CommentShape, ColorParser.ParseOrDefault(s.CommentColor, 0xFFFFB020));
+    });
+
+    public async Task DeleteCommentAsync(PdfComment comment)
+    {
+        try
+        {
+            if (await Document.RemoveAnnotationAsync(comment.PageIndex, comment.Id))
+                MarkPageChanged(comment.PageIndex);
+        }
+        catch (Exception ex) when (ex is PdfException or ObjectDisposedException) { }
+    }
+
+    public async Task UndoAsync()
+    {
+        if (_undo.Count == 0)
+            return;
+        var (page, id) = _undo.Pop();
+        try
+        {
+            await Document.RemoveAnnotationAsync(page, id);
+        }
+        catch (Exception ex) when (ex is PdfException or ObjectDisposedException) { }
+        MarkPageChanged(page);
+    }
+
+    private async Task EditAsync(int page, Func<Task<string?>> edit)
+    {
+        try
+        {
+            if (await edit() is { } id)
+            {
+                _undo.Push((page, id));
+                MarkPageChanged(page);
+            }
+        }
+        catch (Exception ex) when (ex is PdfException or ObjectDisposedException or ArgumentException)
+        {
+            await _main.ShowMessageAsync(Loc.Get("EditFailed"), ex.Message);
+        }
+    }
+
+    private void MarkPageChanged(int page)
+    {
+        if ((uint)page < (uint)_revisions.Length)
+            _revisions[page]++;
+        _comments.Remove(page);
+        IsModified = Document.IsModified;
+        OnPropertyChanged(nameof(CanUndo));
+        if (_thumbnails is not null && page < _thumbnails.Count)
+            _thumbnails[page].Reset();
+        PageContentChanged?.Invoke(page);
+        CommentsChanged?.Invoke();
+    }
+
+    /// <summary>After saving: the file now holds every change.</summary>
+    public void MarkSaved() => IsModified = Document.IsModified;
+
     // --- Persistence -------------------------------------------------------------------------
 
     public void SaveViewState(DocumentViewState state)
@@ -378,6 +518,7 @@ public sealed partial class OutlineItemViewModel(DocumentViewModel owner, Outlin
 {
     public string Title { get; } = item.Title;
     public int PageIndex { get; } = item.PageIndex;
+    public override string ToString() => Title;
     public IReadOnlyList<OutlineItemViewModel> Children { get; } = item.Children.Select(c => new OutlineItemViewModel(owner, c)).ToList();
 
     [RelayCommand]
@@ -406,6 +547,7 @@ public sealed partial class ThumbnailViewModel : ObservableObject
 
     public int PageIndex { get; }
     public string Label => (PageIndex + 1).ToString(System.Globalization.CultureInfo.CurrentCulture);
+    public override string ToString() => Loc.Format("PageN", Label);
     public double Width => ThumbWidth;
     public double Height { get; }
 

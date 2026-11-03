@@ -38,11 +38,19 @@ public sealed partial class MainWindow : Window, IAppShell
         AddHandler(DragDrop.DropEvent, OnDrop);
         _vm.ReadAloud.Problem += key => Dispatcher.UIThread.Post(() => _ = _vm.ShowMessageAsync(Loc.Get("ReadAloud"), Loc.Get(key)));
         Opened += OnOpened;
+        Closing += OnClosing;
+        _vm.PropertyChanged += (_, e) =>
+        {
+            // Keep the docked tools panel's enabled states current.
+            if (e.PropertyName is nameof(MainViewModel.ActiveDocument) or nameof(MainViewModel.HasDocuments) or nameof(MainViewModel.IsToolsPanelOpen))
+                this.GetVisualDescendantsOfType<ToolsPanel>().FirstOrDefault()?.RefreshAvailability();
+        };
     }
 
     private async void OnOpened(object? sender, EventArgs e)
     {
         HideDrawnTitle();
+        PerfLog.Start(this);
 
         if (_options.BenchmarkOutput is { } output)
         {
@@ -78,15 +86,18 @@ public sealed partial class MainWindow : Window, IAppShell
         Visual root = this;
         while (Avalonia.VisualTree.VisualExtensions.GetVisualParent(root) is { } parent)
             root = parent;
+        // The extra Fullscreen caption button would sit on top of our Page colors / Settings
+        // buttons; reading mode (F11) covers full screen.
         foreach (var visual in Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(root))
-            if (visual is Control { Name: "PART_TitleTextPanel" } title)
-                title.IsVisible = false;
+            if (visual is Control { Name: "PART_TitleTextPanel" or "PART_FullScreenButton" } part)
+                part.IsVisible = false;
     }
 
     public void SaveAll()
     {
         _vm.ReadAloud.Stop();
         _vm.SaveState();
+        PerfLog.Summary();
     }
 
     private void ActivateWindow()
@@ -154,7 +165,38 @@ public sealed partial class MainWindow : Window, IAppShell
 
     private void OnPrevHit(object? sender, RoutedEventArgs e) => _vm.ActiveDocument?.NextHit(-1);
     private void OnNextHit(object? sender, RoutedEventArgs e) => _vm.ActiveDocument?.NextHit(+1);
-    private void OnToolsClick(object? sender, RoutedEventArgs e) => _vm.IsToolsPanelOpen = !_vm.IsToolsPanelOpen;
+    private void OnExitClick(object? sender, RoutedEventArgs e) => CloseWindow();
+
+    /// <summary>Fills File → Open recent each time the menu opens.</summary>
+    private void OnFileMenuOpening(object? sender, EventArgs e)
+    {
+        RecentMenu.Items.Clear();
+        foreach (var recent in _vm.RecentFiles.Take(10))
+        {
+            var item = new MenuItem { Header = recent.Name, Command = recent.OpenCommand };
+            ToolTip.SetTip(item, recent.Path);
+            RecentMenu.Items.Add(item);
+        }
+        if (RecentMenu.Items.Count == 0)
+            RecentMenu.Items.Add(new MenuItem { Header = Loc.Get("NoRecent"), IsEnabled = false });
+    }
+
+    private bool _closeConfirmed;
+
+    private async void OnClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (!_closeConfirmed && _vm.Documents.Any(d => d.IsModified))
+        {
+            e.Cancel = true;
+            if (await _vm.ConfirmCloseAllAsync())
+            {
+                _closeConfirmed = true;
+                Close();
+            }
+            return;
+        }
+        SaveAll();
+    }
     private void OnSettingsClick(object? sender, RoutedEventArgs e) => _vm.OpenSettings();
     private void OnStopReading(object? sender, RoutedEventArgs e) => _vm.ReadAloud.Stop();
 
@@ -192,6 +234,20 @@ public sealed partial class MainWindow : Window, IAppShell
         });
         return files.Select(f => f.TryGetLocalPath()).OfType<string>().ToList();
     }
+
+    public async Task<string?> PickSavePathAsync(string suggestedFileName)
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            SuggestedFileName = suggestedFileName,
+            DefaultExtension = "pdf",
+            ShowOverwritePrompt = true,
+            FileTypeChoices = [new FilePickerFileType(Loc.Get("PdfFiles")) { Patterns = ["*.pdf"], MimeTypes = ["application/pdf"] }],
+        });
+        return file?.TryGetLocalPath();
+    }
+
+    public void CloseWindow() => Close();
 
     public async Task CopyToClipboardAsync(string text)
     {

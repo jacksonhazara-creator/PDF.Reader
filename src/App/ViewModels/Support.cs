@@ -31,6 +31,7 @@ public sealed class AppCommand
     public Func<bool> CanExecute { get; }
     public IReadOnlyList<KeyGesture> Gestures { get; }
     public string GestureText { get; }
+    public override string ToString() => Title;
 
     public Geometry? Icon => Avalonia.Application.Current?.TryGetResource(IconKey, null, out var g) == true ? g as Geometry : null;
 
@@ -97,12 +98,16 @@ public sealed partial class CommandPaletteViewModel(Func<IReadOnlyList<AppComman
 public sealed partial class DialogViewModel : ObservableObject
 {
     private readonly TaskCompletionSource<bool> _result = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<int> _choice = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public required string Title { get; init; }
     public required string Message { get; init; }
     public string PrimaryText { get; init; } = Loc.Get("OK");
     public string? SecondaryText { get; init; }
     public bool HasSecondary => SecondaryText is not null;
+    /// <summary>Optional third button (e.g. Cancel in Save / Don't save / Cancel).</summary>
+    public string? TertiaryText { get; init; }
+    public bool HasTertiary => TertiaryText is not null;
     public bool HasInput { get; init; }
     public bool IsPassword { get; init; }
     public char PasswordChar => IsPassword ? '●' : '\0';
@@ -113,9 +118,21 @@ public sealed partial class DialogViewModel : ObservableObject
     partial void OnErrorTextChanged(string? value) => OnPropertyChanged(nameof(HasError));
 
     public Task<bool> Result => _result.Task;
+    /// <summary>0 = primary, 1 = secondary, 2 = tertiary.</summary>
+    public Task<int> Choice => _choice.Task;
 
-    [RelayCommand] public void Primary() => _result.TrySetResult(true);
-    [RelayCommand] public void Secondary() => _result.TrySetResult(false);
+    [RelayCommand] public void Primary() => Complete(0);
+    [RelayCommand] public void Secondary() => Complete(1);
+    [RelayCommand] public void Tertiary() => Complete(2);
+
+    /// <summary>Esc: the safest choice (Cancel when there is one).</summary>
+    public void Dismiss() => Complete(HasTertiary ? 2 : 1);
+
+    private void Complete(int choice)
+    {
+        _choice.TrySetResult(choice);
+        _result.TrySetResult(choice == 0);
+    }
 }
 
 public sealed partial class RecentFileViewModel(MainViewModel main, string path, int pageCount, DateTime lastOpenedUtc) : ObservableObject

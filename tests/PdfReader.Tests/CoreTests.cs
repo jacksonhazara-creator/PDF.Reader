@@ -106,6 +106,26 @@ public class CoreTests
     }
 
     [Fact]
+    public void Marker_color_combines_strength_and_transparency()
+    {
+        var s = new AppSettings { MarkerColor = "#FF0000", MarkerStrength = 1, MarkerTransparency = 0 };
+        Assert.Equal(0xFFFF0000u, s.ResolveMarkerArgb());
+
+        s.MarkerTransparency = 0.5;
+        Assert.Equal(0x80u, s.ResolveMarkerArgb() >> 24);
+
+        s.MarkerStrength = 0.5; // half way to white
+        var rgb = s.ResolveMarkerArgb() & 0xFFFFFF;
+        Assert.Equal(0xFF8080u, rgb, new ToleranceComparer(1));
+    }
+
+    private sealed class ToleranceComparer(int tolerance) : IEqualityComparer<uint>
+    {
+        public bool Equals(uint a, uint b) => Enumerable.Range(0, 3).All(i => Math.Abs((int)((a >> (i * 8)) & 0xFF) - (int)((b >> (i * 8)) & 0xFF)) <= tolerance);
+        public int GetHashCode(uint obj) => 0;
+    }
+
+    [Fact]
     public void Command_matcher_ranks_prefix_over_fuzzy()
     {
         var prefix = CommandMatcher.Score("Page colors", "page");
