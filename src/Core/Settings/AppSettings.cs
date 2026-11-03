@@ -14,6 +14,8 @@ public sealed class AppSettings
     /// <summary>"system", "en" or "de".</summary>
     public string Language { get; set; } = "system";
     public bool RestoreSession { get; set; } = true;
+    /// <summary>Shows developer tools such as the self-diagnosis in Settings → General.</summary>
+    public bool DeveloperMode { get; set; }
     public ZoomMode DefaultZoom { get; set; } = ZoomMode.FitWidth;
 
     // Appearance

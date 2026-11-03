@@ -109,6 +109,12 @@ public sealed partial class DialogViewModel : ObservableObject
     public string? TertiaryText { get; init; }
     public bool HasTertiary => TertiaryText is not null;
     public bool HasInput { get; init; }
+    /// <summary>Long monospace text in a scroll area (self-diagnosis report).</summary>
+    public bool IsReport { get; init; }
+    public double DialogWidth => IsReport ? 680 : 440;
+    public double MessageMaxHeight => IsReport ? 460 : double.PositiveInfinity;
+    public Avalonia.Media.FontFamily MessageFont => IsReport ? new("Cascadia Mono, Consolas, Courier New") : Avalonia.Media.FontFamily.Default;
+    public double MessageFontSize => IsReport ? 12 : 14;
     public bool IsPassword { get; init; }
     public char PasswordChar => IsPassword ? '●' : '\0';
 

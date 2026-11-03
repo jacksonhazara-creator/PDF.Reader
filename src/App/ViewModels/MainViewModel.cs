@@ -23,6 +23,8 @@ public interface IAppShell
     void SetFullScreen(bool fullScreen);
     void FocusSearch();
     void ApplyTheme(AppTheme theme);
+    /// <summary>The window, for frame timing in the self-diagnosis.</summary>
+    Avalonia.Controls.TopLevel Window { get; }
 }
 
 public sealed partial class MainViewModel : ObservableObject
@@ -474,6 +476,44 @@ public sealed partial class MainViewModel : ObservableObject
             doc.CurrentPage,
             doc.PageCount,
             page => doc.GoToPage(page));
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Developer mode: self-diagnosis
+    // ---------------------------------------------------------------------------------------
+
+    private bool _diagnosing;
+
+    /// <summary>The text of the last self-diagnosis report (for tests).</summary>
+    internal string? LastDiagnosticsReport { get; private set; }
+
+    public async Task RunSelfDiagnosisAsync()
+    {
+        if (_diagnosing)
+            return;
+        _diagnosing = true;
+        try
+        {
+            var (report, path) = await new SelfDiagnostics(this, _shell.Window)
+                .RunAsync(step => ProgressText = Loc.Format("DiagnosticsRunning", step));
+            ProgressText = null;
+            LastDiagnosticsReport = report;
+            var dialog = new DialogViewModel
+            {
+                Title = Loc.Get("DiagnosticsTitle"),
+                Message = report + Environment.NewLine + path,
+                PrimaryText = Loc.Get("CopyReport"),
+                SecondaryText = Loc.Get("Close"),
+                IsReport = true,
+            };
+            if (await ShowDialogAsync(dialog))
+                await CopyTextAsync(report);
+        }
+        finally
+        {
+            ProgressText = null;
+            _diagnosing = false;
+        }
     }
 
     public void SetPageColorMode(PageColorMode mode)

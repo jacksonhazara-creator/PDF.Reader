@@ -604,6 +604,14 @@ public sealed class PdfViewer : UserControl
     internal bool IsSharp => _pageRects.Length > 0 && AllVisibleTilesReady();
     internal double ScrollY => _scroll.Offset.Y;
 
+    /// <summary>Scrolls like the mouse wheel would (self-diagnosis); wraps to the top at the end.</summary>
+    internal void ScrollByPixels(double dy)
+    {
+        var max = Math.Max(0, _scroll.Extent.Height - _scroll.Viewport.Height);
+        var y = _scroll.Offset.Y + dy;
+        _scroll.Offset = new Vector(_scroll.Offset.X, y > max ? 0 : Math.Max(0, y));
+    }
+
     private bool AllVisibleTilesReady()
     {
         var vp = Viewport;

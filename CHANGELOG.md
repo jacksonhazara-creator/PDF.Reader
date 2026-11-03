@@ -15,6 +15,7 @@ All notable changes to this project are documented here. The format follows
 - Signature and initials (draw or type), saved locally for reuse.
 - Right panel: pages with page box, bookmarks (go to, add, delete), comments (page, date, go to, delete); collapsible.
 - File menu and Print button; Save, Save as, unsaved-changes prompt, undo.
+- Developer mode (Settings → General): "Run self-diagnosis" tests the engine, every annotation type, all tools and shortcuts, and live scroll/zoom/panel smoothness on this PC, then shows a copyable report (also saved under %LOCALAPPDATA%PDF.ReaderDiagnostics). Uses a generated sample; no document content, nothing sent.
 
 ### Changed
 - All tools panel is docked (pushes the document aside), dark grey, with a Hide button.

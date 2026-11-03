@@ -418,6 +418,48 @@ public class AppTests
     }
 
     [AvaloniaFact]
+    public async Task Developer_mode_self_diagnosis_runs_and_reports()
+    {
+        var app = await Start();
+        app.Click("Settings (Ctrl+,)");
+        Assert.False(app.HasButton("Run self-diagnosis"));
+        app.Vm.SettingsPage.DeveloperMode = true;
+        await app.Settle();
+        Assert.True(app.Vm.Settings.DeveloperMode);
+        app.Click(app.All<Button>().First(b => b.Content as string == "Run self-diagnosis" && AppSession.IsShown(b)));
+        Assert.False(app.Vm.IsSettingsOpen);
+
+        // Headless windows only draw frames when told to; tick like a 60 Hz screen.
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (app.Vm.Dialog is null && sw.Elapsed < TimeSpan.FromMinutes(3))
+        {
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+            await Task.Delay(16);
+        }
+        var report = app.Vm.LastDiagnosticsReport;
+        Assert.NotNull(report);
+        File.WriteAllText(Path.Combine(Path.GetTempPath(), "pdfreader-diagnosis-headless.txt"), report);
+        var savedTo = app.Vm.Dialog!.Message.Split(Environment.NewLine)[^1];
+        Assert.True(File.Exists(savedTo));
+        File.Delete(savedTo);
+
+        foreach (var section in new[] { "Environment", "PDF engine", "Annotations", "Tools & commands", "Live viewer (lag)", "Measurements" })
+            Assert.Contains(section + Environment.NewLine, report);
+        Assert.DoesNotContain("Section completed", report);
+        // Frame timings are meaningless in a headless window; everything else must pass.
+        var failures = report.Split(Environment.NewLine).Where(l => l.Contains("[FAIL]") && !l.Contains(": smooth") && !l.Contains("until sharp") && !l.Contains("Jump to")).ToList();
+        Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
+
+        Assert.Single(app.Vm.Documents);
+        Assert.DoesNotContain(app.Vm.RecentFiles, r => r.Path.Contains("pdfreader-diag", StringComparison.Ordinal));
+        Assert.Equal(ToolKind.Select, app.Markup.Tool);
+        app.Click(app.All<Button>().First(b => b.Content as string == "Close" && AppSession.IsShown(b) && b.FindAncestorOfType<PdfReader.App.Views.DialogView>() is not null));
+        Assert.Null(app.Vm.Dialog);
+        app.Window.Close();
+    }
+
+    [AvaloniaFact]
     public async Task Command_palette_runs_commands()
     {
         var app = await Start();

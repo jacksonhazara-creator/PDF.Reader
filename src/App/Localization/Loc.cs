@@ -370,6 +370,15 @@ public static class Loc
         ("ColorGray", "Gray", "Grau"),
         ("ResizeTip", "Drag to resize", "Ziehen, um die Größe zu ändern"),
 
+        // Developer mode / self-diagnosis
+        ("DeveloperMode", "Developer mode", "Entwicklermodus"),
+        ("DeveloperModeNote", "Shows the self-diagnosis, which tests the app on this PC and writes a report (no document content, nothing is sent).", "Zeigt die Selbstdiagnose, die die App auf diesem PC testet und einen Bericht erstellt (keine Dokumentinhalte, nichts wird gesendet)."),
+        ("RunDiagnostics", "Run self-diagnosis", "Selbstdiagnose starten"),
+        ("OpenDiagnosticsFolder", "Open reports folder", "Berichtsordner öffnen"),
+        ("DiagnosticsRunning", "Self-diagnosis: {0}", "Selbstdiagnose: {0}"),
+        ("DiagnosticsTitle", "Self-diagnosis report", "Selbstdiagnose-Bericht"),
+        ("CopyReport", "Copy report", "Bericht kopieren"),
+
         // Settings
         ("Settings", "Settings", "Einstellungen"),
         ("General", "General", "Allgemein"),

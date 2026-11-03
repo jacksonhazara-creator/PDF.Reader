@@ -223,6 +223,8 @@ public sealed partial class MainWindow : Window, IAppShell
 
     // ---------------------------------------------------------------------------------------
     // IAppShell
+
+    Avalonia.Controls.TopLevel IAppShell.Window => this;
     // ---------------------------------------------------------------------------------------
 
     public async Task<IReadOnlyList<string>> PickPdfFilesAsync()

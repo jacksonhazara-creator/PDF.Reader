@@ -72,6 +72,22 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(LanguageChanged));
     }
 
+    public bool DeveloperMode
+    {
+        get => S.DeveloperMode;
+        set { S.DeveloperMode = value; _main.SaveSettings(); OnPropertyChanged(); }
+    }
+
+    [RelayCommand]
+    private Task RunDiagnostics()
+    {
+        _main.IsSettingsOpen = false;
+        return _main.RunSelfDiagnosisAsync();
+    }
+
+    [RelayCommand]
+    private void OpenDiagnosticsFolder() => Services.SelfDiagnostics.OpenReportFolder();
+
     public bool RestoreSession
     {
         get => S.RestoreSession;

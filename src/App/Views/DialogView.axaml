@@ -5,10 +5,12 @@
              x:DataType="vm:DialogViewModel">
   <Panel>
     <Border Classes="scrim" />
-    <Border Classes="floating" Width="440" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="24,20">
+    <Border Classes="floating" Width="{Binding DialogWidth}" MaxWidth="{Binding $parent[Panel].Bounds.Width}" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="24,20">
       <StackPanel Spacing="14">
         <TextBlock Classes="subtitle" FontSize="17" Text="{Binding Title}" />
-        <SelectableTextBlock Text="{Binding Message}" TextWrapping="Wrap" />
+        <ScrollViewer MaxHeight="{Binding MessageMaxHeight}" HorizontalScrollBarVisibility="Disabled">
+          <SelectableTextBlock Text="{Binding Message}" TextWrapping="Wrap" FontFamily="{Binding MessageFont}" FontSize="{Binding MessageFontSize}" />
+        </ScrollViewer>
         <TextBox x:Name="Input" IsVisible="{Binding HasInput}" Text="{Binding InputText}" PasswordChar="{Binding PasswordChar}"
                  KeyDown="OnInputKeyDown" />
         <TextBlock Text="{Binding ErrorText}" IsVisible="{Binding HasError}" Foreground="{DynamicResource SystemErrorTextColor}" TextWrapping="Wrap" />
