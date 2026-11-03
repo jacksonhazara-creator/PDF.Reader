@@ -1,5 +1,8 @@
 # PDF.Reader
 
+[![CI](https://github.com/jacksonhazara-creator/PDF.Reader/actions/workflows/ci.yml/badge.svg)](https://github.com/jacksonhazara-creator/PDF.Reader/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/jacksonhazara-creator/PDF.Reader?include_prereleases)](https://github.com/jacksonhazara-creator/PDF.Reader/releases)
+
 A fast, simple and secure PDF reader for Windows. No ads, no account, no cloud, no telemetry.
 
 ![PDF.Reader in dark mode with thumbnails and search](docs/images/screenshot-dark.png)
