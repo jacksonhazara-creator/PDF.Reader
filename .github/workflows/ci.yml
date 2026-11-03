@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 3 * * *" # nightly: long fuzz run
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore PdfReader.slnx
+
+      - name: Build (warnings include Native AOT / trim analyzers)
+        run: dotnet build PdfReader.slnx -c Release --no-restore
+
+      - name: Test
+        env:
+          FUZZ_ITERATIONS: ${{ github.event_name == 'schedule' && '20000' || '300' }}
+        run: dotnet test PdfReader.slnx -c Release --no-build --logger "trx;LogFileName=results.trx"
+
+      - name: Vulnerable dependency scan
+        shell: pwsh
+        run: |
+          $out = dotnet list PdfReader.slnx package --vulnerable --include-transitive 2>&1 | Out-String
+          Write-Host $out
+          if ($out -match 'has the following vulnerable packages') { throw 'Vulnerable packages found' }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: "**/TestResults/*.trx"
+
+  aot-perf:
+    # Native AOT publish + startup/memory budget check on every push and PR.
+    runs-on: windows-latest
+    needs: build-test
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Publish (Native AOT)
+        run: dotnet publish src/App/PdfReader.App.csproj -c Release -r win-x64 -o publish
+
+      - name: Startup & memory budget
+        shell: pwsh
+        run: ./tools/check-perf.ps1 -Exe publish/PDF.Reader.exe -Budget perf/budget.json

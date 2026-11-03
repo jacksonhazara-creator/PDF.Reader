@@ -1,0 +1,125 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PdfReader.App.ViewModels"
+             xmlns:c="using:PdfReader.App.Controls"
+             xmlns:l="using:PdfReader.App.Localization"
+             x:Class="PdfReader.App.Views.DocumentView"
+             x:DataType="vm:DocumentViewModel"
+             Background="{DynamicResource ViewerBrush}">
+  <Grid RowDefinitions="Auto,*" ColumnDefinitions="Auto,*">
+
+    <!-- Security banner: active content found and blocked -->
+    <Border Grid.ColumnSpan="2" Background="{DynamicResource WarningBackgroundBrush}" Padding="12,8"
+            IsVisible="{Binding IsSecurityBannerVisible}">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <c:Icon Data="{StaticResource IconShield}" Foreground="{DynamicResource WarningForegroundBrush}" Margin="0,0,10,0" />
+        <TextBlock Grid.Column="1" Text="{Binding SecurityMessage}" TextWrapping="Wrap" VerticalAlignment="Center" />
+        <Button Grid.Column="2" Classes="popup" Content="{l:Tr Dismiss}" Command="{Binding DismissSecurityBannerCommand}" />
+      </Grid>
+    </Border>
+
+    <!-- Sidebar: thumbnails / bookmarks -->
+    <Border Grid.Row="1" Width="172" IsVisible="{Binding IsSidebarOpen}" Background="{DynamicResource ChromeBrush}"
+            BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="0,0,1,0">
+      <Grid RowDefinitions="Auto,*">
+        <Border Margin="8" Padding="2" CornerRadius="7" Background="{DynamicResource HoverBrush}">
+          <UniformGrid Columns="2">
+            <RadioButton Classes="segment" GroupName="sidebar" IsChecked="{Binding IsThumbnailsTab}" ToolTip.Tip="{l:Tr Thumbnails}">
+              <c:Icon Data="{StaticResource IconGrid}" Width="16" Height="16" />
+            </RadioButton>
+            <RadioButton Classes="segment" GroupName="sidebar" IsChecked="{Binding IsOutlineTab}" ToolTip.Tip="{l:Tr Outline}">
+              <c:Icon Data="{StaticResource IconList}" Width="16" Height="16" />
+            </RadioButton>
+          </UniformGrid>
+        </Border>
+
+        <ListBox Grid.Row="1" Classes="plain" ItemsSource="{Binding Thumbnails}" IsVisible="{Binding IsThumbnailsTab}"
+                 SelectionMode="Single">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:ThumbnailViewModel">
+              <Button Classes="row" Command="{Binding NavigateCommand}" HorizontalContentAlignment="Center" Padding="4">
+                <StackPanel Spacing="4" HorizontalAlignment="Center">
+                  <Border Width="{Binding Width}" Height="{Binding Height}" Background="White" CornerRadius="3"
+                          BoxShadow="{StaticResource SoftShadow}" BorderThickness="2"
+                          Classes.current="{Binding IsCurrent}">
+                    <Image Source="{Binding Image}" Stretch="Uniform" />
+                  </Border>
+                  <TextBlock Classes="secondary" Text="{Binding Label}" HorizontalAlignment="Center" />
+                </StackPanel>
+              </Button>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+          <ListBox.Styles>
+            <Style Selector="Border.current">
+              <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentColor}" />
+            </Style>
+            <Style Selector="ListBoxItem">
+              <Setter Property="Padding" Value="2" />
+            </Style>
+          </ListBox.Styles>
+        </ListBox>
+
+        <Panel Grid.Row="1" IsVisible="{Binding IsOutlineTab}">
+          <TextBlock Classes="secondary" Text="{l:Tr NoOutline}" TextWrapping="Wrap" Margin="12" IsVisible="{Binding !HasOutline}" />
+          <TreeView ItemsSource="{Binding Outline}" IsVisible="{Binding HasOutline}">
+            <TreeView.ItemTemplate>
+              <TreeDataTemplate x:DataType="vm:OutlineItemViewModel" ItemsSource="{Binding Children}">
+                <Button Classes="row" Padding="4,3" Command="{Binding NavigateCommand}" ToolTip.Tip="{Binding Title}">
+                  <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                </Button>
+              </TreeDataTemplate>
+            </TreeView.ItemTemplate>
+          </TreeView>
+        </Panel>
+      </Grid>
+    </Border>
+
+    <!-- Pages -->
+    <Panel Grid.Row="1" Grid.Column="1" x:Name="ViewerHost" PointerMoved="OnPointerActivity">
+      <c:PdfViewer x:Name="Viewer" />
+
+      <!-- Bottom bar: fades out while reading, returns on mouse move -->
+      <Border x:Name="BottomBar" Classes="floating fade" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+              Margin="0,0,0,18" Padding="6,4" PointerEntered="OnBottomBarEntered">
+        <StackPanel Orientation="Horizontal" Spacing="2">
+          <ToggleButton Classes="icon" IsChecked="{Binding IsSidebarOpen}" ToolTip.Tip="{l:Tr SidebarTip}">
+            <c:Icon Data="{StaticResource IconSidebar}" Width="16" Height="16" />
+          </ToggleButton>
+          <Rectangle Width="1" Height="18" Fill="{DynamicResource SubtleBorderBrush}" Margin="4,0" />
+          <TextBox x:Name="PageBox" Width="54" MinHeight="28" Padding="6,3" HorizontalContentAlignment="Center"
+                   VerticalAlignment="Center" ToolTip.Tip="{l:Tr PageNumberTip}"
+                   Text="{Binding CurrentPageNumber, Mode=OneWay}" KeyDown="OnPageBoxKeyDown" LostFocus="OnPageBoxLostFocus" />
+          <TextBlock Classes="secondary" Text="{Binding PageCountText}" VerticalAlignment="Center" Margin="6,0,8,0" />
+          <Rectangle Width="1" Height="18" Fill="{DynamicResource SubtleBorderBrush}" Margin="4,0" />
+          <Button Classes="icon" Command="{Binding ZoomOutCommand}" ToolTip.Tip="{l:Tr ZoomOutTip}">
+            <c:Icon Data="{StaticResource IconMinus}" Width="16" Height="16" />
+          </Button>
+          <Button Classes="popup" Padding="6,4" MinWidth="58" HorizontalContentAlignment="Center" Content="{Binding ZoomText}">
+            <Button.Flyout>
+              <MenuFlyout Placement="Top">
+                <MenuItem Header="{l:Tr FitWidth}" Command="{Binding FitWidthCommand}" InputGesture="Ctrl+D0" />
+                <MenuItem Header="{l:Tr FitPage}" Command="{Binding FitPageCommand}" InputGesture="Ctrl+D2" />
+                <MenuItem Header="{l:Tr ActualSize}" Command="{Binding ActualSizeCommand}" InputGesture="Ctrl+D1" />
+                <Separator />
+                <MenuItem Header="50%" Click="OnZoomPreset" Tag="0.5" />
+                <MenuItem Header="100%" Click="OnZoomPreset" Tag="1" />
+                <MenuItem Header="150%" Click="OnZoomPreset" Tag="1.5" />
+                <MenuItem Header="200%" Click="OnZoomPreset" Tag="2" />
+                <MenuItem Header="400%" Click="OnZoomPreset" Tag="4" />
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
+          <Button Classes="icon" Command="{Binding ZoomInCommand}" ToolTip.Tip="{l:Tr ZoomInTip}">
+            <c:Icon Data="{StaticResource IconPlus}" Width="16" Height="16" />
+          </Button>
+          <Button Classes="icon" Command="{Binding FitWidthCommand}" ToolTip.Tip="{l:Tr FitWidthTip}">
+            <c:Icon Data="{StaticResource IconFitWidth}" Width="16" Height="16" />
+          </Button>
+          <Button Classes="icon" Command="{Binding FitPageCommand}" ToolTip.Tip="{l:Tr FitPageTip}">
+            <c:Icon Data="{StaticResource IconFitPage}" Width="16" Height="16" />
+          </Button>
+        </StackPanel>
+      </Border>
+    </Panel>
+  </Grid>
+</UserControl>

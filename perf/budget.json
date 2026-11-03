@@ -1,0 +1,6 @@
+{
+  "_comment": "Upper limits checked in CI on the Native AOT build (GitHub-hosted runners are slower than a typical laptop). Targets on a mid-range laptop: window < 1000 ms, first sharp page < 300 ms after that.",
+  "windowShownMs": 1500,
+  "firstPageMs": 2200,
+  "workingSetMb": 220
+}

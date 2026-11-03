@@ -1,0 +1,19 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="PdfReader.App.App"
+             RequestedThemeVariant="Default"
+             Name="PDF.Reader">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://PDF.Reader/Styles/Theme.axaml" />
+        <ResourceInclude Source="avares://PDF.Reader/Styles/Icons.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+    <StyleInclude Source="avares://PDF.Reader/Styles/Controls.axaml" />
+  </Application.Styles>
+</Application>

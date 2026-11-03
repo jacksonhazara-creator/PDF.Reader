@@ -1,0 +1,50 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ResourceDictionary.ThemeDictionaries>
+    <ResourceDictionary x:Key="Light">
+      <SolidColorBrush x:Key="ChromeBrush" Color="#F3F3F3" />
+      <SolidColorBrush x:Key="ViewerBrush" Color="#E6E6E8" />
+      <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="SurfaceAltBrush" Color="#F7F7F7" />
+      <SolidColorBrush x:Key="SubtleBorderBrush" Color="#E2E2E2" />
+      <SolidColorBrush x:Key="HoverBrush" Color="#0F000000" />
+      <SolidColorBrush x:Key="PressedBrush" Color="#18000000" />
+      <SolidColorBrush x:Key="SelectedTabBrush" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="TextPrimaryBrush" Color="#1B1B1B" />
+      <SolidColorBrush x:Key="TextSecondaryBrush" Color="#616161" />
+      <SolidColorBrush x:Key="ScrimBrush" Color="#40000000" />
+      <SolidColorBrush x:Key="FloatingBrush" Color="#F8FFFFFF" />
+      <SolidColorBrush x:Key="WarningBackgroundBrush" Color="#FFF4CE" />
+      <SolidColorBrush x:Key="WarningForegroundBrush" Color="#8A5300" />
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Dark">
+      <SolidColorBrush x:Key="ChromeBrush" Color="#202020" />
+      <SolidColorBrush x:Key="ViewerBrush" Color="#161616" />
+      <SolidColorBrush x:Key="SurfaceBrush" Color="#2B2B2B" />
+      <SolidColorBrush x:Key="SurfaceAltBrush" Color="#262626" />
+      <SolidColorBrush x:Key="SubtleBorderBrush" Color="#3A3A3A" />
+      <SolidColorBrush x:Key="HoverBrush" Color="#14FFFFFF" />
+      <SolidColorBrush x:Key="PressedBrush" Color="#0CFFFFFF" />
+      <SolidColorBrush x:Key="SelectedTabBrush" Color="#2D2D2D" />
+      <SolidColorBrush x:Key="TextPrimaryBrush" Color="#F2F2F2" />
+      <SolidColorBrush x:Key="TextSecondaryBrush" Color="#ABABAB" />
+      <SolidColorBrush x:Key="ScrimBrush" Color="#66000000" />
+      <SolidColorBrush x:Key="FloatingBrush" Color="#F22C2C2C" />
+      <SolidColorBrush x:Key="WarningBackgroundBrush" Color="#433519" />
+      <SolidColorBrush x:Key="WarningForegroundBrush" Color="#FCE100" />
+    </ResourceDictionary>
+  </ResourceDictionary.ThemeDictionaries>
+
+  <!-- Tool group colors (All tools panel) -->
+  <SolidColorBrush x:Key="ToolBlueBrush" Color="#2F6FEB" />
+  <SolidColorBrush x:Key="ToolPurpleBrush" Color="#8E5BE8" />
+  <SolidColorBrush x:Key="ToolGreenBrush" Color="#1F9D55" />
+  <SolidColorBrush x:Key="ToolOrangeBrush" Color="#E8762C" />
+  <SolidColorBrush x:Key="ToolRedBrush" Color="#D9363E" />
+  <SolidColorBrush x:Key="ToolTealBrush" Color="#0E9AA7" />
+
+  <BoxShadows x:Key="FloatingShadow">0 8 24 0 #33000000</BoxShadows>
+  <BoxShadows x:Key="SoftShadow">0 2 8 0 #22000000</BoxShadows>
+  <CornerRadius x:Key="ControlRadius">6</CornerRadius>
+  <CornerRadius x:Key="OverlayRadius">10</CornerRadius>
+</ResourceDictionary>

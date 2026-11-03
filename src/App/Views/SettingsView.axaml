@@ -1,0 +1,196 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PdfReader.App.ViewModels"
+             xmlns:c="using:PdfReader.App.Controls"
+             xmlns:l="using:PdfReader.App.Localization"
+             x:Class="PdfReader.App.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel"
+             Background="{DynamicResource ViewerBrush}">
+  <UserControl.Styles>
+    <Style Selector="Border.setting">
+      <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="16,12" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid ColumnDefinitions="220,*">
+    <!-- Navigation -->
+    <Border Background="{DynamicResource ChromeBrush}" BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="0,0,1,0">
+      <StackPanel Margin="10,16" Spacing="2">
+        <Grid ColumnDefinitions="Auto,*" Margin="4,0,0,14">
+          <Button Classes="icon" Command="{Binding CloseCommand}" ToolTip.Tip="{l:Tr Close}">
+            <c:Icon Data="{StaticResource IconChevronLeft}" Width="16" Height="16" />
+          </Button>
+          <TextBlock Grid.Column="1" Classes="subtitle" FontSize="17" Text="{l:Tr Settings}" VerticalAlignment="Center" Margin="6,0,0,0" />
+        </Grid>
+        <RadioButton Classes="nav" GroupName="settingsnav" IsChecked="{Binding IsGeneralPage}">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <c:Icon Data="{StaticResource IconSettings}" Width="16" Height="16" />
+            <TextBlock Text="{l:Tr General}" />
+          </StackPanel>
+        </RadioButton>
+        <RadioButton Classes="nav" GroupName="settingsnav" IsChecked="{Binding IsAppearancePage}">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <c:Icon Data="{StaticResource IconDrop}" Width="16" Height="16" />
+            <TextBlock Text="{l:Tr Appearance}" />
+          </StackPanel>
+        </RadioButton>
+        <RadioButton Classes="nav" GroupName="settingsnav" IsChecked="{Binding IsUpdatesPage}">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <c:Icon Data="{StaticResource IconRefresh}" Width="16" Height="16" />
+            <TextBlock Text="{l:Tr Updates}" />
+          </StackPanel>
+        </RadioButton>
+      </StackPanel>
+    </Border>
+
+    <ScrollViewer Grid.Column="1">
+      <Panel MaxWidth="760" Margin="32,24" HorizontalAlignment="Stretch">
+
+        <!-- General -->
+        <StackPanel Spacing="10" IsVisible="{Binding IsGeneralPage}">
+          <TextBlock Classes="title" Text="{l:Tr General}" Margin="0,0,0,8" />
+          <Border Classes="setting">
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="{l:Tr Language}" />
+                <TextBlock Classes="secondary" Text="{l:Tr RestartToApply}" IsVisible="{Binding LanguageChanged}" />
+              </StackPanel>
+              <ComboBox Grid.Column="1" MinWidth="200" ItemsSource="{Binding Languages}" SelectedItem="{Binding SelectedLanguage}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ChoiceBase">
+                    <TextBlock Text="{Binding Label}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </Grid>
+          </Border>
+          <Border Classes="setting">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="{l:Tr RestoreSession}" VerticalAlignment="Center" />
+              <ToggleSwitch Grid.Column="1" IsChecked="{Binding RestoreSession}" OnContent="" OffContent="" />
+            </Grid>
+          </Border>
+          <Border Classes="setting">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="{l:Tr DefaultZoom}" VerticalAlignment="Center" />
+              <ComboBox Grid.Column="1" MinWidth="200" ItemsSource="{Binding ZoomModes}" SelectedItem="{Binding SelectedZoom}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ChoiceBase">
+                    <TextBlock Text="{Binding Label}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </Grid>
+          </Border>
+        </StackPanel>
+
+        <!-- Appearance -->
+        <StackPanel Spacing="10" IsVisible="{Binding IsAppearancePage}">
+          <TextBlock Classes="title" Text="{l:Tr Appearance}" Margin="0,0,0,8" />
+          <Border Classes="setting">
+            <StackPanel Spacing="8">
+              <TextBlock Text="{l:Tr AppTheme}" />
+              <StackPanel Orientation="Horizontal" Spacing="16">
+                <RadioButton GroupName="theme" Content="{l:Tr ThemeSystem}" IsChecked="{Binding ThemeSystem}" />
+                <RadioButton GroupName="theme" Content="{l:Tr ThemeLight}" IsChecked="{Binding ThemeLight}" />
+                <RadioButton GroupName="theme" Content="{l:Tr ThemeDark}" IsChecked="{Binding ThemeDark}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+          <Border Classes="setting">
+            <StackPanel Spacing="8">
+              <TextBlock Text="{l:Tr PageColors}" />
+              <StackPanel Orientation="Horizontal" Spacing="16">
+                <RadioButton GroupName="pages" Content="{l:Tr ColorNormal}" IsChecked="{Binding PageNormal}" />
+                <RadioButton GroupName="pages" Content="{l:Tr ColorDark}" IsChecked="{Binding PageDark}" />
+                <RadioButton GroupName="pages" Content="{l:Tr ColorSepia}" IsChecked="{Binding PageSepia}" />
+                <RadioButton GroupName="pages" Content="{l:Tr ColorCustom}" IsChecked="{Binding PageCustom}" />
+              </StackPanel>
+              <ToggleSwitch Content="{l:Tr KeepImagesNatural}" IsChecked="{Binding KeepImagesNatural}" OnContent="" OffContent="" />
+              <TextBlock Classes="secondary" Text="{l:Tr PageColorsNote}" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+          <Border Classes="setting">
+            <StackPanel Spacing="10">
+              <TextBlock Text="{l:Tr CustomColors}" />
+              <StackPanel Orientation="Horizontal" Spacing="16">
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="secondary" Text="{l:Tr TextColor}" />
+                  <TextBox Text="{Binding CustomForeground}" Width="120" />
+                </StackPanel>
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="secondary" Text="{l:Tr BackgroundColor}" />
+                  <TextBox Text="{Binding CustomBackground}" Width="120" />
+                </StackPanel>
+              </StackPanel>
+              <ItemsControl ItemsSource="{Binding Presets}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="8" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:CustomColorPreset">
+                    <Button Padding="0" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource SubtleBorderBrush}"
+                            Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).ApplyPresetCommand}"
+                            CommandParameter="{Binding}">
+                      <Border Width="44" Height="32" CornerRadius="7" Background="{Binding BackgroundBrush}">
+                        <TextBlock Text="Aa" Foreground="{Binding ForegroundBrush}" FontWeight="SemiBold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- Updates -->
+        <StackPanel Spacing="10" IsVisible="{Binding IsUpdatesPage}">
+          <TextBlock Classes="title" Text="{l:Tr Updates}" Margin="0,0,0,8" />
+          <Border Classes="setting">
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel VerticalAlignment="Center" Spacing="2">
+                <TextBlock Text="{l:Tr CurrentVersion}" />
+                <TextBlock Classes="secondary" Text="{Binding Updates.CurrentVersion}" />
+                <TextBlock Classes="secondary" Text="{Binding Updates.Status}" TextWrapping="Wrap" Margin="0,4,0,0" />
+              </StackPanel>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Button Classes="primary" Content="{l:Tr RestartToInstall}" Command="{Binding RestartToInstallCommand}"
+                        IsVisible="{Binding Updates.IsReadyToInstall}" />
+                <Button Content="{l:Tr CheckForUpdates}" Command="{Binding CheckForUpdatesCommand}"
+                        IsEnabled="{Binding !Updates.IsBusy}" IsVisible="{Binding !Updates.IsReadyToInstall}" />
+              </StackPanel>
+            </Grid>
+          </Border>
+          <ProgressBar Value="{Binding Updates.DownloadProgress}" Maximum="100" IsVisible="{Binding Updates.IsBusy}" />
+          <Border Classes="setting" IsVisible="{Binding Updates.HasReleaseNotes}">
+            <StackPanel Spacing="6">
+              <TextBlock Text="{l:Tr WhatsNew}" FontWeight="SemiBold" />
+              <SelectableTextBlock Text="{Binding Updates.ReleaseNotes}" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+          <Border Classes="setting">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="{l:Tr CheckAutomatically}" VerticalAlignment="Center" />
+              <ToggleSwitch Grid.Column="1" IsChecked="{Binding CheckOnStartup}" OnContent="" OffContent="" />
+            </Grid>
+          </Border>
+          <Border Classes="setting">
+            <StackPanel Spacing="8">
+              <TextBlock Text="{l:Tr UpdateChannel}" />
+              <RadioButton GroupName="channel" Content="{l:Tr ChannelStable}" IsChecked="{Binding ChannelStable}" />
+              <RadioButton GroupName="channel" Content="{l:Tr ChannelBeta}" IsChecked="{Binding ChannelBeta}" />
+            </StackPanel>
+          </Border>
+          <TextBlock Classes="secondary" Text="{l:Tr Privacy}" TextWrapping="Wrap" Margin="4,8" />
+        </StackPanel>
+      </Panel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

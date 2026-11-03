@@ -1,0 +1,72 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PdfReader.App.ViewModels"
+             xmlns:c="using:PdfReader.App.Controls"
+             xmlns:l="using:PdfReader.App.Localization"
+             x:Class="PdfReader.App.Views.StartView"
+             x:DataType="vm:MainViewModel"
+             Background="{DynamicResource ViewerBrush}">
+  <UserControl.Styles>
+    <Style Selector="Panel.recent Button.remove"><Setter Property="Opacity" Value="0" /></Style>
+    <Style Selector="Panel.recent:pointerover Button.remove"><Setter Property="Opacity" Value="1" /></Style>
+  </UserControl.Styles>
+  <ScrollViewer>
+    <StackPanel MaxWidth="880" Margin="32,48,32,32" Spacing="28">
+
+      <!-- Drop zone + big open button -->
+      <Border BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="2" CornerRadius="14"
+              Background="{DynamicResource SurfaceAltBrush}" Padding="32,44">
+        <StackPanel HorizontalAlignment="Center" Spacing="14">
+          <Border Width="64" Height="64" CornerRadius="16" Background="{DynamicResource SystemAccentColor}" HorizontalAlignment="Center">
+            <c:Icon Data="{StaticResource IconFile}" Width="34" Height="34" Foreground="White" StrokeThickness="1.8" />
+          </Border>
+          <TextBlock Classes="title" Text="{l:Tr AppName}" HorizontalAlignment="Center" />
+          <Button Classes="primary" HorizontalAlignment="Center" Command="{Binding OpenDialogCommand}" ToolTip.Tip="{l:Tr OpenTip}">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <c:Icon Data="{StaticResource IconFolder}" Foreground="White" />
+              <TextBlock Text="{l:Tr OpenPdf}" FontSize="15" />
+            </StackPanel>
+          </Button>
+          <TextBlock Classes="secondary" Text="{l:Tr DropHint}" HorizontalAlignment="Center" />
+        </StackPanel>
+      </Border>
+
+      <!-- Recent files -->
+      <StackPanel Spacing="12">
+        <TextBlock Classes="subtitle" Text="{l:Tr RecentFiles}" />
+        <TextBlock Classes="secondary" Text="{l:Tr NoRecentFiles}" IsVisible="{Binding !HasRecentFiles}" />
+        <ItemsControl ItemsSource="{Binding RecentFiles}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel ItemSpacing="12" LineSpacing="12" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:RecentFileViewModel">
+              <Panel Width="168" Classes="recent">
+                <Button Classes="row" Padding="8" Command="{Binding OpenCommand}" ToolTip.Tip="{Binding Path}">
+                  <StackPanel Spacing="6">
+                    <Border Height="200" CornerRadius="6" Background="{DynamicResource SurfaceBrush}" ClipToBounds="True"
+                            BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="1">
+                      <Panel>
+                        <c:Icon Data="{StaticResource IconFile}" Width="36" Height="36" Opacity="0.35" />
+                        <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" VerticalAlignment="Top" />
+                      </Panel>
+                    </Border>
+                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" />
+                    <TextBlock Classes="secondary" Text="{Binding Details}" TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                </Button>
+                <Button Classes="icon small remove fade" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12"
+                        Background="{DynamicResource FloatingBrush}" ToolTip.Tip="{l:Tr RemoveFromRecent}"
+                        Command="{Binding RemoveCommand}">
+                  <c:Icon Data="{StaticResource IconClose}" Width="12" Height="12" />
+                </Button>
+              </Panel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

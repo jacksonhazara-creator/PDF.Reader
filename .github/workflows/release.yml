@@ -1,0 +1,98 @@
+name: Release
+
+# Push a tag like v1.2.0 (stable) or v1.2.0-beta.1 (pre-release, Beta channel).
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write # create the GitHub Release
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  VELOPACK_VERSION: "1.2.161" # keep in sync with Directory.Packages.props
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.TrimStart('v')
+          $pre = if ($version.Contains('-')) { 'true' } else { 'false' }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "prerelease=$pre" >> $env:GITHUB_OUTPUT
+
+      - name: Test
+        run: dotnet test PdfReader.slnx -c Release
+
+      - name: Publish (Native AOT)
+        run: dotnet publish src/App/PdfReader.App.csproj -c Release -r win-x64 -o publish -p:Version=${{ steps.version.outputs.version }}
+
+      - name: Startup & memory budget
+        shell: pwsh
+        run: ./tools/check-perf.ps1 -Exe publish/PDF.Reader.exe -Budget perf/budget.json
+
+      - name: Release notes from CHANGELOG
+        shell: pwsh
+        run: ./tools/release-notes.ps1 -Version ${{ steps.version.outputs.version }} -Out release-notes.md
+
+      - name: Install vpk
+        run: dotnet tool install -g vpk --version ${{ env.VELOPACK_VERSION }}
+
+      - name: Download previous releases (for delta updates)
+        shell: pwsh
+        run: |
+          $pre = if ('${{ steps.version.outputs.prerelease }}' -eq 'true') { '--pre' } else { '' }
+          vpk download github --repoUrl "${{ github.server_url }}/${{ github.repository }}" $pre --token "${{ secrets.GITHUB_TOKEN }}"
+        continue-on-error: true # first release has nothing to download
+
+      - name: Pack installer, portable build and update packages
+        shell: pwsh
+        env:
+          # Optional code signing. Leave these secrets unset to build unsigned.
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          TRUSTED_SIGNING_METADATA: ${{ secrets.TRUSTED_SIGNING_METADATA }}
+        run: |
+          $args = @(
+            'pack',
+            '--packId', 'PDF.Reader',
+            '--packVersion', '${{ steps.version.outputs.version }}',
+            '--packDir', 'publish',
+            '--mainExe', 'PDF.Reader.exe',
+            '--packTitle', 'PDF.Reader',
+            '--packAuthors', 'PDF.Reader contributors',
+            '--icon', 'src/App/Assets/app.ico',
+            '--releaseNotes', 'release-notes.md',
+            '--shortcuts', 'StartMenuRoot'
+          )
+          if ($env:TRUSTED_SIGNING_METADATA) {
+            # Azure Trusted Signing: metadata JSON (Endpoint, CodeSigningAccountName, CertificateProfileName) from a secret.
+            $env:TRUSTED_SIGNING_METADATA | Set-Content -Path signing.json -Encoding utf8
+            $args += @('--azureTrustedSignFile', 'signing.json')
+          }
+          vpk @args
+          if (Test-Path signing.json) { Remove-Item signing.json }
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        run: |
+          $pre = if ('${{ steps.version.outputs.prerelease }}' -eq 'true') { '--pre' } else { '' }
+          vpk upload github `
+            --repoUrl "${{ github.server_url }}/${{ github.repository }}" `
+            --tag "${{ github.ref_name }}" `
+            --releaseName "PDF.Reader ${{ steps.version.outputs.version }}" `
+            --publish $pre `
+            --token "${{ secrets.GITHUB_TOKEN }}"

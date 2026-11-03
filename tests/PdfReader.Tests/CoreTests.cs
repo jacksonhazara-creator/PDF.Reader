@@ -89,6 +89,22 @@ public class CoreTests
         Assert.Equal(PageColorMode.Dark, s.ResolvePageColors(PageColorMode.Dark).Mode);
     }
 
+    [Theory]
+    [InlineData("https://example.com/a?b=c", true)]
+    [InlineData("http://example.com", true)]
+    [InlineData("mailto:someone@example.com", true)]
+    [InlineData("file:///C:/Windows/System32/calc.exe", false)]
+    [InlineData("javascript:alert(1)", false)]
+    [InlineData("C:\\Windows\\notepad.exe", false)]
+    [InlineData("ms-settings:privacy", false)]
+    [InlineData("\\\\server\\share\\evil.exe", false)]
+    [InlineData("", false)]
+    [InlineData("not a url", false)]
+    public void Only_web_and_mail_links_can_be_opened(string target, bool allowed)
+    {
+        Assert.Equal(allowed, PdfReader.Core.Security.LinkPolicy.IsAllowedUri(target, out _));
+    }
+
     [Fact]
     public void Command_matcher_ranks_prefix_over_fuzzy()
     {

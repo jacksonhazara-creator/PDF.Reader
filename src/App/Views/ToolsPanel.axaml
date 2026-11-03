@@ -1,0 +1,50 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PdfReader.App.ViewModels"
+             xmlns:c="using:PdfReader.App.Controls"
+             xmlns:l="using:PdfReader.App.Localization"
+             xmlns:v="using:PdfReader.App.Views"
+             x:Class="PdfReader.App.Views.ToolsPanel"
+             x:DataType="vm:MainViewModel">
+  <Panel>
+    <Border Classes="scrim" Opacity="0.4" PointerPressed="OnScrimPressed" />
+    <Border Classes="floating" Width="320" HorizontalAlignment="Left" Margin="8" CornerRadius="10">
+      <Grid RowDefinitions="Auto,*">
+        <Grid ColumnDefinitions="*,Auto" Margin="16,12,8,4">
+          <TextBlock Classes="subtitle" Text="{l:Tr AllTools}" VerticalAlignment="Center" />
+          <Button Grid.Column="1" Classes="icon" Click="OnClose" ToolTip.Tip="{l:Tr Close}">
+            <c:Icon Data="{StaticResource IconClose}" Width="14" Height="14" />
+          </Button>
+        </Grid>
+        <ScrollViewer Grid.Row="1">
+          <ItemsControl ItemsSource="{Binding ToolGroups}" Margin="8,0,8,12">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ToolGroup">
+                <StackPanel Margin="0,8,0,0">
+                  <TextBlock Classes="caption" Text="{Binding Title}" Margin="8,4" />
+                  <ItemsControl ItemsSource="{Binding Tools}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:AppCommand">
+                        <Button Classes="row" Click="OnToolClick" Tag="{Binding}" ToolTip.Tip="{Binding Title}"
+                                IsEnabled="{Binding CanExecute, Converter={x:Static v:CanExecuteConverter.Instance}}">
+                          <Grid ColumnDefinitions="Auto,*,Auto">
+                            <Border Width="30" Height="30" CornerRadius="7" Margin="0,0,12,0"
+                                    Background="{Binding $parent[ItemsControl].((vm:ToolGroup)DataContext).Color}">
+                              <c:Icon Data="{Binding Icon}" Width="17" Height="17" Foreground="White" />
+                            </Border>
+                            <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2" Classes="secondary" Text="{Binding GestureText}" VerticalAlignment="Center" Margin="8,0,4,0" />
+                          </Grid>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Grid>
+    </Border>
+  </Panel>
+</UserControl>

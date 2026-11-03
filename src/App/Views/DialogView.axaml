@@ -1,0 +1,22 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PdfReader.App.ViewModels"
+             x:Class="PdfReader.App.Views.DialogView"
+             x:DataType="vm:DialogViewModel">
+  <Panel>
+    <Border Classes="scrim" />
+    <Border Classes="floating" Width="440" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="24,20">
+      <StackPanel Spacing="14">
+        <TextBlock Classes="subtitle" FontSize="17" Text="{Binding Title}" />
+        <SelectableTextBlock Text="{Binding Message}" TextWrapping="Wrap" />
+        <TextBox x:Name="Input" IsVisible="{Binding HasInput}" Text="{Binding InputText}" PasswordChar="{Binding PasswordChar}"
+                 KeyDown="OnInputKeyDown" />
+        <TextBlock Text="{Binding ErrorText}" IsVisible="{Binding HasError}" Foreground="{DynamicResource SystemErrorTextColor}" TextWrapping="Wrap" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,6,0,0">
+          <Button Content="{Binding SecondaryText}" IsVisible="{Binding HasSecondary}" Command="{Binding SecondaryCommand}" MinWidth="96" />
+          <Button x:Name="PrimaryButton" Classes="primary" Content="{Binding PrimaryText}" Command="{Binding PrimaryCommand}" MinWidth="96" IsDefault="True" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Panel>
+</UserControl>
