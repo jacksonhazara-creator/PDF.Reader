@@ -274,8 +274,13 @@ public sealed partial class MainViewModel : ObservableObject
             document.SaveViewState(State.GetDocumentState(path));
             Documents.Remove(document);
             await document.DisposeAsync();
-            if (await OpenFileAsync(path) is { } reopened && index >= 0 && index < Documents.Count)
-                Documents.Move(Documents.IndexOf(reopened), index);
+            if (await OpenFileAsync(path) is { } reopened)
+            {
+                if (index >= 0 && index < Documents.Count)
+                    Documents.Move(Documents.IndexOf(reopened), index);
+                // Reordering makes the tab strip drop its selection; keep the saved copy in front.
+                ActiveDocument = reopened;
+            }
         }
         ShowToast(Loc.Get("Saved"));
         return true;

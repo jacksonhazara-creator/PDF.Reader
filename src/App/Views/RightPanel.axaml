@@ -23,7 +23,7 @@
 
   <Panel>
     <!-- Expanded -->
-    <Border Width="300" IsVisible="{Binding IsSidebarOpen}" Background="{DynamicResource ChromeBrush}"
+    <Border x:Name="Expanded" Width="300" IsVisible="{Binding IsSidebarOpen}" Background="{DynamicResource ChromeBrush}"
             BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="1,0,0,0">
       <Grid RowDefinitions="Auto,*">
         <Grid ColumnDefinitions="*,Auto" Margin="8,8,6,6">
@@ -132,6 +132,11 @@
         </Panel>
       </Grid>
     </Border>
+
+    <!-- Drag the left edge to resize -->
+    <Border x:Name="ResizeHandle" Width="6" HorizontalAlignment="Left" Background="Transparent" Cursor="SizeWestEast"
+            IsVisible="{Binding IsSidebarOpen}" ToolTip.Tip="{l:Tr ResizeTip}" AutomationProperties.Name="{l:Tr ResizeTip}"
+            PointerPressed="OnResizePressed" PointerMoved="OnResizeMoved" PointerReleased="OnResizeReleased" />
 
     <!-- Collapsed strip: click to bring the panel back -->
     <Border Width="40" IsVisible="{Binding !IsSidebarOpen}" Background="{DynamicResource ChromeBrush}"

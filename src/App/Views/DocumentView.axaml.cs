@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.VisualTree;
 using PdfReader.App.ViewModels;
 using PdfReader.Core.Settings;
 
@@ -45,30 +46,83 @@ public sealed partial class DocumentView : UserControl
         Toolbar.SetDock(dock);
     }
 
-    private void OnToolbarDragged(Point topLeft, bool dropped)
+    private Border? _dragPreview;
+
+    /// <summary>
+    /// While the grip is dragged the toolbar itself stays put (moving it between containers would
+    /// break the mouse capture); a translucent preview shows where it will go, snapped to the edge
+    /// the pointer is near. On release the toolbar moves there.
+    /// </summary>
+    private void OnToolbarDragged(Point topLeft, Point pointer, bool dropped)
     {
         if (Settings is not { } s)
             return;
-        if (Toolbar.Dock != ToolbarDock.Floating)
-            ApplyDock(ToolbarDock.Floating);
-
         var root = Root.Bounds;
-        var x = Math.Clamp(topLeft.X, 0, Math.Max(0, root.Width - Toolbar.Bounds.Width));
-        var y = Math.Clamp(topLeft.Y - Root.Bounds.Y, 0, Math.Max(0, root.Height - Math.Min(Toolbar.Bounds.Height, root.Height)));
-        Canvas.SetLeft(Toolbar, x);
-        Canvas.SetTop(Toolbar, y);
-        if (!dropped)
-            return;
+        var size = Toolbar.Bounds.Size;
+        var x = Math.Clamp(topLeft.X, 0, Math.Max(0, root.Width - size.Width));
+        var y = Math.Clamp(topLeft.Y - root.Y, 0, Math.Max(0, root.Height - Math.Min(size.Height, root.Height)));
+        var dock = SnapFor(pointer, root);
 
-        // Snap to an edge when dropped close to it; otherwise stay where it was put.
-        var dock = x < SnapDistance ? ToolbarDock.Left
-            : x + Toolbar.Bounds.Width > root.Width - SnapDistance - 260 && x > root.Width / 2 ? ToolbarDock.Right
-            : y < SnapDistance / 2 ? ToolbarDock.Top
-            : ToolbarDock.Floating;
+        if (!dropped)
+        {
+            ShowPreview(dock switch
+            {
+                ToolbarDock.Left => new Rect(0, 0, size.Width, root.Height),
+                ToolbarDock.Right => new Rect(root.Width - RightPanelWidth() - size.Width, 0, size.Width, root.Height),
+                ToolbarDock.Top => new Rect(0, 0, root.Width - RightPanelWidth(), 46),
+                _ => new Rect(x, y, Math.Max(size.Width, 60), Math.Min(size.Height, root.Height - y)),
+            });
+            return;
+        }
+
+        HidePreview();
         s.ToolbarDock = dock;
         s.ToolbarX = x;
         s.ToolbarY = y;
         Vm!.Main.SaveSettings();
         ApplyDock(dock);
+    }
+
+    private double RightPanelWidth() => this.GetVisualDescendants().OfType<RightPanel>().FirstOrDefault()?.Bounds.Width ?? 0;
+
+    /// <summary>Snap by where the pointer is: left edge, right side (the right panel counts as the edge), top, or float.</summary>
+    private ToolbarDock SnapFor(Point pointer, Rect root)
+    {
+        var px = pointer.X;
+        var py = pointer.Y - root.Y;
+        return px < SnapDistance ? ToolbarDock.Left
+            : px > root.Width - RightPanelWidth() - SnapDistance ? ToolbarDock.Right
+            : py < SnapDistance / 2 ? ToolbarDock.Top
+            : ToolbarDock.Floating;
+    }
+
+    private void ShowPreview(Rect rect)
+    {
+        if (_dragPreview is null)
+        {
+            _dragPreview = new Border
+            {
+                CornerRadius = new CornerRadius(8),
+                BorderThickness = new Thickness(2),
+                IsHitTestVisible = false,
+            };
+            if (this.TryFindResource("SystemAccentColor", out var accent) && accent is Avalonia.Media.Color c)
+            {
+                _dragPreview.BorderBrush = new Avalonia.Media.SolidColorBrush(c);
+                _dragPreview.Background = new Avalonia.Media.SolidColorBrush(c, 0.15);
+            }
+            FloatLayer.Children.Add(_dragPreview);
+        }
+        _dragPreview.IsVisible = true;
+        _dragPreview.Width = rect.Width;
+        _dragPreview.Height = rect.Height;
+        Canvas.SetLeft(_dragPreview, rect.X);
+        Canvas.SetTop(_dragPreview, rect.Y);
+    }
+
+    private void HidePreview()
+    {
+        if (_dragPreview is not null)
+            _dragPreview.IsVisible = false;
     }
 }

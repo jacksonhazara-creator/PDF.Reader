@@ -31,6 +31,8 @@ public sealed partial class PdfDocument
     private const string KeyQuote = "PDFR_Quote";
     private const string KeyRects = "PDFR_Rects";
     private const string KeyColor = "PDFR_Color";
+    /// <summary>Exact 0xAARRGGBB; PDFium cannot read /C back once an appearance exists.</summary>
+    private const string KeyArgb = "PDFR_ARGB";
 
     private int _modified;
 
@@ -193,6 +195,7 @@ public sealed partial class PdfDocument
         Pdfium.FPDFAnnot_SetFlags(annot, Pdfium.FPDF_ANNOT_FLAG_PRINT);
         var id = Guid.NewGuid().ToString("N");
         SetString(annot, KeyId, id);
+        SetString(annot, KeyArgb, argb.ToString("X8", CultureInfo.InvariantCulture));
         SetString(annot, "M", ToPdfDate(DateTime.UtcNow));
         SetString(annot, "CreationDate", ToPdfDate(DateTime.UtcNow));
         Volatile.Write(ref _modified, 1);

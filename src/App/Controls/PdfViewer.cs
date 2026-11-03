@@ -590,6 +590,20 @@ public sealed class PdfViewer : UserControl
         }
     }
 
+    // --- Test hooks (UI tests drive the viewer in headless mode) ------------------------------
+
+    /// <summary>Page point (page points, top-left origin) → position inside this viewer, in DIPs.</summary>
+    internal Point PageToViewer(int page, double x, double y)
+    {
+        var r = _pageRects[page];
+        var dip = DipPerPoint;
+        return new Point(r.X + x * dip - _scroll.Offset.X, r.Y + y * dip - _scroll.Offset.Y);
+    }
+
+    internal MenuFlyout? LastContextMenu { get; private set; }
+    internal bool IsSharp => _pageRects.Length > 0 && AllVisibleTilesReady();
+    internal double ScrollY => _scroll.Offset.Y;
+
     private bool AllVisibleTilesReady()
     {
         var vp = Viewport;
@@ -1818,6 +1832,7 @@ public sealed class PdfViewer : UserControl
             _contextHit = null;
             _canvas.InvalidateVisual();
         };
+        LastContextMenu = menu;
         menu.ShowAt(_canvas, showAtPointer: true);
     }
 

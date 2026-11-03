@@ -77,8 +77,8 @@ public sealed class ToolbarView : UserControl
         Content = _root;
     }
 
-    /// <summary>Raised while dragging (position relative to the document view) and when dropped.</summary>
-    public event Action<Point, bool>? Dragged;
+    /// <summary>Raised while dragging and when dropped: the bar's new top-left and the pointer, relative to the document view.</summary>
+    public event Action<Point, Point, bool>? Dragged;
 
     public ToolbarDock Dock { get; private set; } = ToolbarDock.Left;
 
@@ -304,7 +304,7 @@ public sealed class ToolbarView : UserControl
         if (!_dragging || this.FindAncestorOfType<Views.DocumentView>() is not { } host)
             return;
         var p = e.GetPosition(host);
-        Dragged?.Invoke(new Point(p.X - _dragOffset.X, p.Y - _dragOffset.Y), false);
+        Dragged?.Invoke(new Point(p.X - _dragOffset.X, p.Y - _dragOffset.Y), p, false);
     }
 
     private void OnGripReleased(object? sender, PointerReleasedEventArgs e)
@@ -316,7 +316,7 @@ public sealed class ToolbarView : UserControl
         if (this.FindAncestorOfType<Views.DocumentView>() is not { } host)
             return;
         var p = e.GetPosition(host);
-        Dragged?.Invoke(new Point(p.X - _dragOffset.X, p.Y - _dragOffset.Y), true);
+        Dragged?.Invoke(new Point(p.X - _dragOffset.X, p.Y - _dragOffset.Y), p, true);
     }
 
     // --- Resizing the bar ------------------------------------------------------------------

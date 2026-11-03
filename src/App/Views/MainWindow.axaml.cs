@@ -237,6 +237,8 @@ public sealed partial class MainWindow : Window, IAppShell
 
     public async Task<string?> PickSavePathAsync(string suggestedFileName)
     {
+        if (PickSavePathOverride is { } pick)
+            return pick(suggestedFileName);
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             SuggestedFileName = suggestedFileName,
@@ -249,8 +251,14 @@ public sealed partial class MainWindow : Window, IAppShell
 
     public void CloseWindow() => Close();
 
+    /// <summary>Test hooks: native file dialogs cannot open in headless UI tests.</summary>
+    internal Func<string?>? PickFileOverride { get; set; }
+    internal Func<string, string?>? PickSavePathOverride { get; set; }
+
     public async Task<string?> PickAnyFileAsync()
     {
+        if (PickFileOverride is { } pick)
+            return pick();
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { AllowMultiple = false, Title = Loc.Get("ToolAttach") });
         return files.FirstOrDefault()?.TryGetLocalPath();
     }

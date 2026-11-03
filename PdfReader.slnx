@@ -11,5 +11,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PdfReader.Tests/PdfReader.Tests.csproj" />
+    <Project Path="tests/PdfReader.UiTests/PdfReader.UiTests.csproj" />
   </Folder>
 </Solution>

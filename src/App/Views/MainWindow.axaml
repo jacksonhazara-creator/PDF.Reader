@@ -42,9 +42,9 @@
             chrome:WindowDecorationProperties.ElementRole="TitleBar">
       <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,140">
 
-        <StackPanel Orientation="Horizontal" Spacing="2" Margin="6,0,2,0">
+        <StackPanel Orientation="Horizontal" Spacing="4" Margin="6,0,4,0">
           <!-- File tab: open, save, print, ... -->
-          <Button x:Name="FileButton" Classes="popup" Padding="10,5" VerticalAlignment="Center" ToolTip.Tip="{l:Tr FileTip}"
+          <Button x:Name="FileButton" Classes="popup" VerticalAlignment="Center" ToolTip.Tip="{l:Tr FileTip}"
                   AutomationProperties.Name="{l:Tr File}">
             <TextBlock Text="{l:Tr File}" FontWeight="SemiBold" />
             <Button.Flyout>
@@ -71,7 +71,7 @@
               </MenuFlyout>
             </Button.Flyout>
           </Button>
-          <Button Classes="popup" Padding="9,5" VerticalAlignment="Center" Command="{Binding PrintCommand}" IsEnabled="{Binding HasDocuments}"
+          <Button Classes="popup" VerticalAlignment="Center" Command="{Binding PrintCommand}" IsEnabled="{Binding HasDocuments}"
                   ToolTip.Tip="{l:Tr PrintTip}" AutomationProperties.Name="{l:Tr MenuPrintShort}">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <c:Icon Data="{StaticResource IconPrint}" Width="16" Height="16" />
