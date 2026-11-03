@@ -249,14 +249,20 @@ public sealed partial class MainWindow : Window, IAppShell
 
     public void CloseWindow() => Close();
 
+    public async Task<string?> PickAnyFileAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { AllowMultiple = false, Title = Loc.Get("ToolAttach") });
+        return files.FirstOrDefault()?.TryGetLocalPath();
+    }
+
     public async Task CopyToClipboardAsync(string text)
     {
         if (Clipboard is { } clipboard)
             await clipboard.SetTextAsync(text);
     }
 
-    public PrintJob? ShowPrintDialog(int pageCount, int currentPage)
-        => PrintDialog.Show(TryGetPlatformHandle()?.Handle ?? IntPtr.Zero, pageCount);
+    public Task<PrintJob?> ShowPrintDialogAsync(int pageCount, int currentPage)
+        => PrintDialog.ShowAsync(TryGetPlatformHandle()?.Handle ?? IntPtr.Zero, pageCount);
 
     public void SetFullScreen(bool fullScreen)
     {

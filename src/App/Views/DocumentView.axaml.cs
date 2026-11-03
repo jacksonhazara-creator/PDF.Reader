@@ -1,46 +1,74 @@
-using System.Globalization;
+using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Input;
-using Avalonia.Interactivity;
 using PdfReader.App.ViewModels;
+using PdfReader.Core.Settings;
 
 namespace PdfReader.App.Views;
 
 public sealed partial class DocumentView : UserControl
 {
-    public DocumentView() => InitializeComponent();
+    private const double SnapDistance = 70;
+
+    public DocumentView()
+    {
+        InitializeComponent();
+        Toolbar.Dragged += OnToolbarDragged;
+        AttachedToVisualTree += (_, _) => ApplyDock(Settings?.ToolbarDock ?? ToolbarDock.Left);
+    }
 
     private DocumentViewModel? Vm => DataContext as DocumentViewModel;
+    private AppSettings? Settings => Vm?.Main.Settings;
 
-    private void OnPageBoxKeyDown(object? sender, KeyEventArgs e)
+    protected override void OnDataContextChanged(EventArgs e)
     {
-        if (e.Key == Key.Enter)
+        base.OnDataContextChanged(e);
+        if (Settings is { } s)
+            ApplyDock(s.ToolbarDock);
+    }
+
+    /// <summary>Puts the toolbar in its docked position, or on the floating layer.</summary>
+    private void ApplyDock(ToolbarDock dock)
+    {
+        (Toolbar.Parent as Panel)?.Children.Remove(Toolbar);
+        if (dock == ToolbarDock.Floating)
         {
-            CommitPage();
-            Viewer.Focus();
-            e.Handled = true;
+            FloatLayer.Children.Add(Toolbar);
+            var s = Settings!;
+            Canvas.SetLeft(Toolbar, Math.Clamp(s.ToolbarX, 0, Math.Max(0, Bounds.Width - 160)));
+            Canvas.SetTop(Toolbar, Math.Clamp(s.ToolbarY, 0, Math.Max(0, Bounds.Height - 120)));
         }
+        else
+        {
+            DockPanel.SetDock(Toolbar, dock switch { ToolbarDock.Right => Avalonia.Controls.Dock.Right, ToolbarDock.Top => Avalonia.Controls.Dock.Top, _ => Avalonia.Controls.Dock.Left });
+            Dock.Children.Insert(0, Toolbar);
+        }
+        Toolbar.SetDock(dock);
     }
 
-    private void OnPageBoxLostFocus(object? sender, RoutedEventArgs e)
+    private void OnToolbarDragged(Point topLeft, bool dropped)
     {
-        if (Vm is { } vm)
-            PageBox.Text = vm.CurrentPageNumber.ToString(CultureInfo.CurrentCulture);
-    }
+        if (Settings is not { } s)
+            return;
+        if (Toolbar.Dock != ToolbarDock.Floating)
+            ApplyDock(ToolbarDock.Floating);
 
-    private void CommitPage()
-    {
-        if (Vm is { } vm && int.TryParse(PageBox.Text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var page))
-            vm.GoToPage(page - 1);
-        else if (Vm is { } v)
-            PageBox.Text = v.CurrentPageNumber.ToString(CultureInfo.CurrentCulture);
-    }
+        var root = Root.Bounds;
+        var x = Math.Clamp(topLeft.X, 0, Math.Max(0, root.Width - Toolbar.Bounds.Width));
+        var y = Math.Clamp(topLeft.Y - Root.Bounds.Y, 0, Math.Max(0, root.Height - Math.Min(Toolbar.Bounds.Height, root.Height)));
+        Canvas.SetLeft(Toolbar, x);
+        Canvas.SetTop(Toolbar, y);
+        if (!dropped)
+            return;
 
-    private void OnZoomPreset(object? sender, RoutedEventArgs e)
-    {
-        if (sender is MenuItem { Tag: string tag } && double.TryParse(tag, NumberStyles.Float, CultureInfo.InvariantCulture, out var zoom))
-            Vm?.Request(new ViewerRequest.SetZoom(zoom));
+        // Snap to an edge when dropped close to it; otherwise stay where it was put.
+        var dock = x < SnapDistance ? ToolbarDock.Left
+            : x + Toolbar.Bounds.Width > root.Width - SnapDistance - 260 && x > root.Width / 2 ? ToolbarDock.Right
+            : y < SnapDistance / 2 ? ToolbarDock.Top
+            : ToolbarDock.Floating;
+        s.ToolbarDock = dock;
+        s.ToolbarX = x;
+        s.ToolbarY = y;
+        Vm!.Main.SaveSettings();
+        ApplyDock(dock);
     }
-
-    private void OnUndo(object? sender, RoutedEventArgs e) => _ = Vm?.UndoAsync();
 }

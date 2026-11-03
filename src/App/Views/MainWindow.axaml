@@ -71,6 +71,13 @@
               </MenuFlyout>
             </Button.Flyout>
           </Button>
+          <Button Classes="popup" Padding="9,5" VerticalAlignment="Center" Command="{Binding PrintCommand}" IsEnabled="{Binding HasDocuments}"
+                  ToolTip.Tip="{l:Tr PrintTip}" AutomationProperties.Name="{l:Tr MenuPrintShort}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <c:Icon Data="{StaticResource IconPrint}" Width="16" Height="16" />
+              <TextBlock Text="{l:Tr MenuPrintShort}" />
+            </StackPanel>
+          </Button>
           <ToggleButton Classes="icon" ToolTip.Tip="{l:Tr AllToolsTip}" IsChecked="{Binding IsToolsPanelOpen}">
             <c:Icon Data="{StaticResource IconMenu}" />
           </ToggleButton>
@@ -224,6 +231,7 @@
       </Grid>
       <Panel IsVisible="{Binding IsSettingsOpen}"><v:SettingsView DataContext="{Binding SettingsPage}" /></Panel>
       <v:CommandPalette IsVisible="{Binding IsCommandPaletteOpen}" />
+      <Panel IsVisible="{Binding SignatureDialog, Converter={x:Static ObjectConverters.IsNotNull}}"><v:SignatureDialog DataContext="{Binding SignatureDialog}" /></Panel>
       <Panel IsVisible="{Binding Dialog, Converter={x:Static ObjectConverters.IsNotNull}}"><v:DialogView DataContext="{Binding Dialog}" /></Panel>
     </Panel>
   </Grid>

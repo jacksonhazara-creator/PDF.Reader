@@ -1,0 +1,155 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PdfReader.App.ViewModels"
+             xmlns:c="using:PdfReader.App.Controls"
+             xmlns:l="using:PdfReader.App.Localization"
+             x:Class="PdfReader.App.Views.RightPanel"
+             x:DataType="vm:DocumentViewModel">
+  <UserControl.Styles>
+    <Style Selector="RadioButton.tab">
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Name="bg" Background="Transparent" CornerRadius="6" Padding="6,5">
+            <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="RadioButton.tab:pointerover /template/ Border#bg"><Setter Property="Background" Value="{DynamicResource HoverBrush}" /></Style>
+    <Style Selector="RadioButton.tab:checked /template/ Border#bg"><Setter Property="Background" Value="{DynamicResource SurfaceBrush}" /><Setter Property="BoxShadow" Value="{StaticResource SoftShadow}" /></Style>
+    <Style Selector="Button.trash"><Setter Property="Opacity" Value="0.55" /></Style>
+    <Style Selector="Button.trash:pointerover"><Setter Property="Opacity" Value="1" /></Style>
+  </UserControl.Styles>
+
+  <Panel>
+    <!-- Expanded -->
+    <Border Width="300" IsVisible="{Binding IsSidebarOpen}" Background="{DynamicResource ChromeBrush}"
+            BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="1,0,0,0">
+      <Grid RowDefinitions="Auto,*">
+        <Grid ColumnDefinitions="*,Auto" Margin="8,8,6,6">
+          <Border Padding="2" CornerRadius="7" Background="{DynamicResource HoverBrush}">
+            <UniformGrid Columns="3">
+              <RadioButton Classes="tab" GroupName="rp" IsChecked="{Binding IsThumbnailsTab}" ToolTip.Tip="{l:Tr PanelPages}" AutomationProperties.Name="{l:Tr PanelPages}">
+                <StackPanel Orientation="Horizontal" Spacing="5"><c:Icon Data="{StaticResource IconGrid}" Width="14" Height="14" /><TextBlock Text="{l:Tr PanelPages}" FontSize="12" /></StackPanel>
+              </RadioButton>
+              <RadioButton Classes="tab" GroupName="rp" IsChecked="{Binding IsOutlineTab}" ToolTip.Tip="{l:Tr Outline}" AutomationProperties.Name="{l:Tr Outline}">
+                <StackPanel Orientation="Horizontal" Spacing="5"><c:Icon Data="{StaticResource IconBookmark}" Width="14" Height="14" /><TextBlock Text="{l:Tr Outline}" FontSize="12" /></StackPanel>
+              </RadioButton>
+              <RadioButton Classes="tab" GroupName="rp" IsChecked="{Binding IsCommentsTab}" ToolTip.Tip="{l:Tr PanelComments}" AutomationProperties.Name="{l:Tr PanelComments}">
+                <StackPanel Orientation="Horizontal" Spacing="5"><c:Icon Data="{StaticResource IconComment}" Width="14" Height="14" /><TextBlock Text="{l:Tr PanelComments}" FontSize="12" /></StackPanel>
+              </RadioButton>
+            </UniformGrid>
+          </Border>
+          <Button Grid.Column="1" Classes="icon small" Margin="4,0,0,0" Click="OnCollapse" ToolTip.Tip="{l:Tr HidePanel}">
+            <c:Icon Data="{StaticResource IconChevronRight}" Width="14" Height="14" />
+          </Button>
+        </Grid>
+
+        <!-- Pages -->
+        <Grid Grid.Row="1" RowDefinitions="Auto,*" IsVisible="{Binding IsThumbnailsTab}">
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="6" Margin="0,2,0,8">
+            <TextBlock Text="{l:Tr PageLabel}" VerticalAlignment="Center" Classes="secondary" />
+            <TextBox x:Name="PageBox" Width="52" MinHeight="28" Padding="4,3" HorizontalContentAlignment="Center"
+                     ToolTip.Tip="{l:Tr PageNumberTip}" AutomationProperties.Name="{l:Tr PageNumberTip}"
+                     Text="{Binding CurrentPageNumber, Mode=OneWay}" KeyDown="OnPageBoxKeyDown" LostFocus="OnPageBoxLostFocus" />
+            <TextBlock Text="{Binding PageCountText}" VerticalAlignment="Center" Classes="secondary" />
+          </StackPanel>
+          <ListBox Grid.Row="1" Classes="plain" ItemsSource="{Binding Thumbnails}" SelectionMode="Single">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:ThumbnailViewModel">
+                <Button Classes="row" Command="{Binding NavigateCommand}" HorizontalContentAlignment="Center" Padding="4"
+                        AutomationProperties.Name="{Binding}">
+                  <StackPanel Spacing="4" HorizontalAlignment="Center">
+                    <Border Width="{Binding Width}" Height="{Binding Height}" Background="White" CornerRadius="3"
+                            BoxShadow="{StaticResource SoftShadow}" BorderThickness="2" Classes.current="{Binding IsCurrent}">
+                      <Image Source="{Binding Image}" Stretch="Uniform" />
+                    </Border>
+                    <TextBlock Classes="secondary" Text="{Binding Label}" HorizontalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+            <ListBox.Styles>
+              <Style Selector="Border.current"><Setter Property="BorderBrush" Value="{DynamicResource SystemAccentColor}" /></Style>
+              <Style Selector="ListBoxItem"><Setter Property="Padding" Value="2" /></Style>
+            </ListBox.Styles>
+          </ListBox>
+        </Grid>
+
+        <!-- Bookmarks -->
+        <Grid Grid.Row="1" RowDefinitions="Auto,*" IsVisible="{Binding IsOutlineTab}">
+          <Button Classes="row" Margin="8,0,8,6" Command="{Binding AddBookmarkPromptCommand}" AutomationProperties.Name="{l:Tr CmdAddBookmark}">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <c:Icon Data="{StaticResource IconBookmarkAdd}" Width="16" Height="16" />
+              <TextBlock Text="{l:Tr CmdAddBookmark}" />
+            </StackPanel>
+          </Button>
+          <TextBlock Grid.Row="1" Classes="secondary" Text="{l:Tr NoOutline}" TextWrapping="Wrap" Margin="14,6" IsVisible="{Binding !HasOutline}" />
+          <ListBox Grid.Row="1" Classes="plain" ItemsSource="{Binding Bookmarks}" IsVisible="{Binding HasOutline}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:BookmarkItemViewModel">
+                <Grid ColumnDefinitions="*,Auto,Auto">
+                  <Button Classes="row" Padding="4,4" Command="{Binding GoCommand}" ToolTip.Tip="{Binding Title}" AutomationProperties.Name="{Binding Title}">
+                    <Grid ColumnDefinitions="*,Auto" Margin="{Binding Indent}">
+                      <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="1" Classes="secondary" Text="{Binding PageLabel}" Margin="8,0,0,0" />
+                    </Grid>
+                  </Button>
+                  <Button Grid.Column="2" Classes="icon small trash" Command="{Binding DeleteCommand}" ToolTip.Tip="{l:Tr DeleteBookmark}"
+                          AutomationProperties.Name="{l:Tr DeleteBookmark}">
+                    <c:Icon Data="{StaticResource IconTrash}" Width="14" Height="14" />
+                  </Button>
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Grid>
+
+        <!-- Comments -->
+        <Panel Grid.Row="1" IsVisible="{Binding IsCommentsTab}">
+          <TextBlock Classes="secondary" Text="{l:Tr NoComments}" TextWrapping="Wrap" Margin="14,6" IsVisible="{Binding !HasComments}" />
+          <ListBox Classes="plain" ItemsSource="{Binding AllComments}" IsVisible="{Binding HasComments}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:CommentItemViewModel">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                  <Border Width="4" CornerRadius="2" Background="{Binding Color}" Margin="0,2,8,2" />
+                  <Button Grid.Column="1" Classes="row" Padding="2,4" Command="{Binding GoCommand}" AutomationProperties.Name="{Binding Text}">
+                    <StackPanel Spacing="2">
+                      <TextBlock Text="{Binding Text}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding Quote}" Classes="secondary" FontStyle="Italic" TextTrimming="CharacterEllipsis" IsVisible="{Binding HasQuote}" />
+                      <TextBlock Text="{Binding PageLabel}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" />
+                      <TextBlock Text="{Binding DateText}" FontSize="10.5" Foreground="{DynamicResource TextSecondaryBrush}" />
+                    </StackPanel>
+                  </Button>
+                  <Button Grid.Column="2" Classes="icon small trash" VerticalAlignment="Top" Command="{Binding DeleteCommand}"
+                          ToolTip.Tip="{l:Tr Delete}" AutomationProperties.Name="{l:Tr DeleteComment}">
+                    <c:Icon Data="{StaticResource IconTrash}" Width="14" Height="14" />
+                  </Button>
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Panel>
+      </Grid>
+    </Border>
+
+    <!-- Collapsed strip: click to bring the panel back -->
+    <Border Width="40" IsVisible="{Binding !IsSidebarOpen}" Background="{DynamicResource ChromeBrush}"
+            BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="1,0,0,0">
+      <StackPanel Margin="0,8" Spacing="2">
+        <Button Classes="icon" HorizontalAlignment="Center" Click="OnExpand" ToolTip.Tip="{l:Tr ShowPanel}">
+          <c:Icon Data="{StaticResource IconChevronLeft}" Width="14" Height="14" />
+        </Button>
+        <Button Classes="icon" HorizontalAlignment="Center" Click="OnShowPages" ToolTip.Tip="{l:Tr PanelPages}">
+          <c:Icon Data="{StaticResource IconGrid}" Width="16" Height="16" />
+        </Button>
+        <Button Classes="icon" HorizontalAlignment="Center" Click="OnShowBookmarks" ToolTip.Tip="{l:Tr Outline}">
+          <c:Icon Data="{StaticResource IconBookmark}" Width="16" Height="16" />
+        </Button>
+        <Button Classes="icon" HorizontalAlignment="Center" Click="OnShowComments" ToolTip.Tip="{l:Tr PanelComments}">
+          <c:Icon Data="{StaticResource IconComment}" Width="16" Height="16" />
+        </Button>
+      </StackPanel>
+    </Border>
+  </Panel>
+</UserControl>

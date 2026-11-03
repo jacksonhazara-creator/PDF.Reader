@@ -17,8 +17,9 @@ public interface IAppShell
     Task<IReadOnlyList<string>> PickPdfFilesAsync();
     Task<string?> PickSavePathAsync(string suggestedFileName);
     void CloseWindow();
+    Task<string?> PickAnyFileAsync();
     Task CopyToClipboardAsync(string text);
-    PrintJob? ShowPrintDialog(int pageCount, int currentPage);
+    Task<PrintJob?> ShowPrintDialogAsync(int pageCount, int currentPage);
     void SetFullScreen(bool fullScreen);
     void FocusSearch();
     void ApplyTheme(AppTheme theme);
@@ -72,6 +73,8 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial string? ProgressText { get; set; }
 
     public bool IsChromeVisible => !IsReadingMode;
+
+    [ObservableProperty] public partial SignatureDialogViewModel? SignatureDialog { get; set; }
 
     partial void OnIsReadingModeChanged(bool value)
     {
@@ -147,7 +150,7 @@ public sealed partial class MainViewModel : ObservableObject
             }
         }
 
-        var vm = new DocumentViewModel(this, document, path, State.GetDocumentState(path));
+        var vm = new DocumentViewModel(this, document, path, State.GetDocumentState(path), password);
         Documents.Add(vm);
         if (activate || ActiveDocument is null)
             ActiveDocument = vm;
@@ -246,7 +249,9 @@ public sealed partial class MainViewModel : ObservableObject
         try
         {
             ProgressText = Loc.Get("Saving");
-            await document.Document.SaveAsync(path);
+            var edits = document.OutlineEdits.ToList();
+            var password = document.Password;
+            await document.Document.SaveAsync(path, edits.Count == 0 ? null : temp => Core.Bookmarks.OutlineEditor.Apply(temp, edits, password));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PdfException or ObjectDisposedException)
         {
@@ -260,7 +265,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         if (string.Equals(Path.GetFullPath(path), Path.GetFullPath(document.FilePath), StringComparison.OrdinalIgnoreCase))
         {
-            document.MarkSaved();
+            await document.AfterSaveAsync();
         }
         else
         {
@@ -407,7 +412,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         if (ActiveDocument is not { } doc)
             return;
-        var job = _shell.ShowPrintDialog(doc.PageCount, doc.CurrentPage);
+        var job = await _shell.ShowPrintDialogAsync(doc.PageCount, doc.CurrentPage);
         if (job is null)
             return;
         try
@@ -557,18 +562,64 @@ public sealed partial class MainViewModel : ObservableObject
     public bool CloseTopmost()
     {
         if (Dialog is { } d) { d.Dismiss(); return true; }
+        if (SignatureDialog is { } sd) { sd.Cancel(); return true; }
         if (IsCommandPaletteOpen) { IsCommandPaletteOpen = false; return true; }
         if (IsSettingsOpen) { IsSettingsOpen = false; return true; }
         if (IsToolsPanelOpen) { IsToolsPanelOpen = false; return true; }
         // Reading mode first: with the chrome hidden, Esc must always get you out.
         if (IsReadingMode) { IsReadingMode = false; return true; }
         if (ActiveDocument is { HasSelection: true } doc) { doc.Selection = null; return true; }
-        if (Markup.Tool != EditTool.Select) { Markup.Tool = EditTool.Select; return true; }
+        if (Markup.Tool != ToolKind.Select) { Markup.Tool = ToolKind.Select; return true; }
         if (ReadAloud.IsSpeaking) { ReadAloud.Stop(); return true; }
         return false;
     }
 
     public void ApplyTheme() => _shell.ApplyTheme(Settings.Theme);
+
+    // ---------------------------------------------------------------------------------------
+    // Bookmarks, signatures, attachments
+    // ---------------------------------------------------------------------------------------
+
+    public async Task AddBookmarkPromptAsync(DocumentViewModel document)
+    {
+        var dialog = new DialogViewModel
+        {
+            Title = Loc.Get("CmdAddBookmark"),
+            Message = Loc.Format("AddBookmarkMessage", document.CurrentPageNumber),
+            PrimaryText = Loc.Get("Add"),
+            SecondaryText = Loc.Get("Cancel"),
+            HasInput = true,
+            InputText = Loc.Format("PageN", document.CurrentPageNumber),
+        };
+        if (await ShowDialogAsync(dialog))
+        {
+            document.AddBookmark(dialog.InputText);
+            document.ShowSidebar(SidebarTab.Outline);
+        }
+    }
+
+    /// <summary>Opens the signature pad. Returns the saved signature (or null if cancelled).</summary>
+    public async Task<SignatureData?> EditSignatureAsync(bool initials)
+    {
+        var dialog = new SignatureDialogViewModel(initials, initials ? State.Initials : State.Signature);
+        SignatureDialog = dialog;
+        try
+        {
+            var result = await dialog.Result;
+            if (result is null)
+                return null;
+            if (initials) State.Initials = result; else State.Signature = result;
+            SaveState();
+            Markup.NotifySignatures();
+            return result;
+        }
+        finally
+        {
+            SignatureDialog = null;
+        }
+    }
+
+    public Task<string?> PickAttachmentAsync() => _shell.PickAnyFileAsync();
 
     // ---------------------------------------------------------------------------------------
     // Command registry
@@ -585,9 +636,16 @@ public sealed partial class MainViewModel : ObservableObject
             new("save", "CmdSave", "IconSave", () => _ = SaveActiveAsync(), HasDoc, "Ctrl+S"),
             new("saveAs", "CmdSaveAs", "IconSave", () => _ = SaveActiveAsAsync(), HasDoc, "Ctrl+Shift+S"),
             new("undo", "CmdUndo", "IconUndo", () => Doc(d => _ = d.UndoAsync()), () => ActiveDocument?.CanUndo == true, "Ctrl+Z"),
-            new("toolSelect", "CmdToolSelect", "IconSelect", () => Markup.Tool = EditTool.Select, HasDoc),
-            new("toolMarker", "CmdToolMarker", "IconMarker", () => Markup.IsMarker = !Markup.IsMarker, HasDoc, "Ctrl+Shift+H"),
-            new("toolComment", "CmdToolComment", "IconComment", () => Markup.IsComment = !Markup.IsComment, HasDoc, "Ctrl+Shift+M"),
+            new("toolSelect", "ToolSelect", "IconSelect", () => Markup.Tool = ToolKind.Select, HasDoc),
+            new("toolMarker", "ToolHighlight", "IconMarker", () => Markup.Toggle(ToolKind.Highlight), HasDoc, "Ctrl+Shift+H"),
+            new("toolComment", "ToolComment", "IconComment", () => Markup.Toggle(ToolKind.Comment), HasDoc, "Ctrl+Shift+M"),
+            new("toolDraw", "ToolDraw", "IconDraw", () => Markup.Toggle(ToolKind.Draw), HasDoc, "Ctrl+Shift+F"),
+            new("toolText", "ToolTypeText", "IconTypeText", () => Markup.Toggle(ToolKind.TypeText), HasDoc, "Ctrl+Shift+T"),
+            new("toolSign", "ToolSignature", "IconSignature", () => Markup.Toggle(ToolKind.Signature), HasDoc),
+            new("toolStamp", "ToolStamp", "IconStamp", () => Markup.Toggle(ToolKind.Stamp), HasDoc),
+            new("toolPan", "ToolPan", "IconPan", () => Markup.Toggle(ToolKind.Pan), HasDoc),
+            new("comments", "CmdComments", "IconComment", () => Doc(d => d.ShowSidebar(SidebarTab.Comments)), HasDoc),
+            new("addBookmark", "CmdAddBookmark", "IconBookmarkAdd", () => Doc(d => _ = AddBookmarkPromptAsync(d)), HasDoc),
             new("exit", "CmdExit", "IconClose", () => _shell.CloseWindow()),
             new("close", "CmdClose", "IconClose", () => _ = CloseDocumentAsync(null), HasDoc, "Ctrl+W", "Ctrl+F4"),
             new("nextTab", "CmdNextTab", "IconChevronRight", () => CycleTabs(+1), () => Documents.Count > 1, "Ctrl+Tab"),
@@ -633,10 +691,11 @@ public sealed partial class MainViewModel : ObservableObject
 
         return
         [
-            new("GroupView", Brush("ToolBlueBrush"), [C("thumbnails"), C("outline"), C("readingMode"), C("pageColors"), C("fitWidth"), C("fitPage")]),
-            new("GroupMarkup", Brush("ToolRedBrush"), [C("toolMarker"), C("toolComment"), C("undo"), C("save"), C("saveAs")]),
+            new("GroupView", Brush("ToolBlueBrush"), [C("readingMode"), C("pageColors"), C("fitWidth"), C("fitPage"), C("toolPan")]),
+            new("GroupMarkup", Brush("ToolRedBrush"), [C("toolMarker"), C("toolComment"), C("toolDraw"), C("toolText"), C("toolStamp"), C("toolSign"), C("undo")]),
+            new("GroupPanels", Brush("ToolTealBrush"), [C("thumbnails"), C("outline"), C("comments"), C("addBookmark")]),
             new("GroupRead", Brush("ToolPurpleBrush"), [C("find"), C("goto"), C("readAloud"), C("selectAll")]),
-            new("GroupDocument", Brush("ToolGreenBrush"), [C("open"), C("print"), C("close")]),
+            new("GroupDocument", Brush("ToolGreenBrush"), [C("open"), C("save"), C("saveAs"), C("print"), C("close")]),
             new("GroupApp", Brush("ToolOrangeBrush"), [C("palette"), C("settings"), C("updates")]),
         ];
     }

@@ -228,6 +228,42 @@
     <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentColor}" />
   </Style>
 
+  <!-- Tool bar -->
+  <Style Selector="Border.toolbar.docked">
+    <Setter Property="Background" Value="{DynamicResource ChromeBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
+  </Style>
+  <Style Selector="Border.toolbar.floating">
+    <Setter Property="Background" Value="{DynamicResource FloatingBrush}" />
+  </Style>
+  <Style Selector="Rectangle.toolsep">
+    <Setter Property="Fill" Value="{DynamicResource SubtleBorderBrush}" />
+  </Style>
+  <Style Selector="Button.toolgroup">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="8,6" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="CornerRadius" Value="{StaticResource ControlRadius}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+  </Style>
+  <Style Selector="Button.toolgroup:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+  </Style>
+  <Style Selector="Button.toolgroup:disabled /template/ ContentPresenter#PART_ContentPresenter, Button.row:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.toolgroup.active /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+  </Style>
+  <Style Selector="Button.toolgroup.active c|Icon">
+    <Setter Property="Foreground" Value="{DynamicResource SystemAccentColor}" />
+  </Style>
+  <Style Selector="Button.toolgroup.active TextBlock">
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
   <Style Selector="c|Icon">
     <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
   </Style>

@@ -7,12 +7,16 @@
              x:Class="PdfReader.App.Views.ToolsPanel"
              x:DataType="vm:MainViewModel">
   <!-- Docked panel: sits beside the document (never on top of it). -->
-  <Border Background="{DynamicResource ChromeBrush}" BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="0,0,1,0">
+  <ThemeVariantScope RequestedThemeVariant="Dark">
+  <Border Background="#2B2B2B" BorderBrush="#3A3A3A" BorderThickness="0,0,1,0">
     <Grid RowDefinitions="Auto,*">
       <Grid ColumnDefinitions="*,Auto" Margin="16,12,8,4">
         <TextBlock Classes="subtitle" Text="{l:Tr AllTools}" VerticalAlignment="Center" />
-        <Button Grid.Column="1" Classes="icon" Click="OnClose" ToolTip.Tip="{l:Tr Close}">
-          <c:Icon Data="{StaticResource IconChevronLeft}" Width="14" Height="14" />
+        <Button Grid.Column="1" Classes="popup" Padding="8,4" Click="OnClose" ToolTip.Tip="{l:Tr HideToolsTip}" AutomationProperties.Name="{l:Tr HideTools}">
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <c:Icon Data="{StaticResource IconChevronLeft}" Width="14" Height="14" />
+            <TextBlock Text="{l:Tr HideTools}" />
+          </StackPanel>
         </Button>
       </Grid>
       <ScrollViewer Grid.Row="1">
@@ -45,4 +49,5 @@
       </ScrollViewer>
     </Grid>
   </Border>
+  </ThemeVariantScope>
 </UserControl>

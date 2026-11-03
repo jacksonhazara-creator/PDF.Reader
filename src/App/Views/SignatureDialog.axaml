@@ -1,0 +1,39 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PdfReader.App.ViewModels"
+             xmlns:c="using:PdfReader.App.Controls"
+             xmlns:l="using:PdfReader.App.Localization"
+             x:Class="PdfReader.App.Views.SignatureDialog"
+             x:DataType="vm:SignatureDialogViewModel">
+  <Panel>
+    <Border Classes="scrim" />
+    <Border Classes="floating" Width="520" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="22,18">
+      <StackPanel Spacing="12">
+        <TextBlock Classes="subtitle" FontSize="17" Text="{Binding Title}" />
+        <StackPanel Orientation="Horizontal" Spacing="16">
+          <RadioButton GroupName="sigmode" Content="{l:Tr SignDraw}" IsChecked="{Binding IsDrawTab}" />
+          <RadioButton GroupName="sigmode" Content="{l:Tr SignType}" IsChecked="{Binding IsTypeTab}" />
+        </StackPanel>
+        <Panel Height="170">
+          <c:SignaturePad x:Name="Pad" IsVisible="{Binding IsDrawTab}" AutomationProperties.Name="{l:Tr SignDraw}" />
+          <StackPanel IsVisible="{Binding IsTypeTab}" Spacing="10" VerticalAlignment="Center">
+            <TextBox x:Name="TypedBox" Text="{Binding TypedText}" PlaceholderText="{l:Tr SignTypePlaceholder}"
+                     AutomationProperties.Name="{l:Tr SignTypePlaceholder}" />
+            <Border Background="White" CornerRadius="8" Height="90">
+              <TextBlock Text="{Binding TypedText}" FontFamily="Segoe Script, Ink Free, Segoe UI" FontSize="34"
+                         Foreground="#1A2A6C" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+          </StackPanel>
+        </Panel>
+        <TextBlock Classes="secondary" Text="{l:Tr SignNote}" TextWrapping="Wrap" />
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <Button Content="{l:Tr Clear}" Command="{Binding ClearCommand}" />
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+            <Button Content="{l:Tr Cancel}" Command="{Binding CancelCommand}" MinWidth="90" />
+            <Button Classes="primary" Content="{l:Tr SignSave}" Command="{Binding SaveCommand}" MinWidth="110" />
+          </StackPanel>
+        </Grid>
+      </StackPanel>
+    </Border>
+  </Panel>
+</UserControl>

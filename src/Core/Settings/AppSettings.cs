@@ -5,6 +5,7 @@ namespace PdfReader.Core.Settings;
 public enum AppTheme { System, Light, Dark }
 public enum UpdateChannel { Stable, Beta }
 public enum ZoomMode { FitWidth, FitPage, ActualSize, Custom }
+public enum ToolbarDock { Left, Right, Top, Floating }
 
 /// <summary>User preferences (settings.json). Defaults are chosen so nobody ever has to open Settings.</summary>
 public sealed class AppSettings
@@ -38,6 +39,26 @@ public sealed class AppSettings
     public string CommentColor { get; set; } = "#FFB020";
     public bool CommentOnLastWord { get; set; } = true;
 
+    // Draw & text tools
+    /// <summary>#RRGGBB</summary>
+    public string DrawColor { get; set; } = "#D9363E";
+    public double DrawThickness { get; set; } = 2.5;
+    /// <summary>0 = opaque … 0.9.</summary>
+    public double DrawTransparency { get; set; }
+    public double TextSize { get; set; } = 14;
+    public string StampLabel { get; set; } = "Approved";
+
+    // Layout
+    public ToolbarDock ToolbarDock { get; set; } = ToolbarDock.Left;
+    public double ToolbarX { get; set; } = 90;
+    public double ToolbarY { get; set; } = 60;
+    /// <summary>Toolbar width when docked left/right or floating; below ~110 it shows icons only.</summary>
+    public double ToolbarWidth { get; set; } = 160;
+    public double RightPanelWidth { get; set; } = 300;
+    public bool RightPanelOpen { get; set; } = true;
+    /// <summary>Pages, Bookmarks or Comments.</summary>
+    public string RightPanelTab { get; set; } = "Pages";
+
     // Updates
     public bool CheckForUpdatesOnStartup { get; set; } = true;
     public UpdateChannel UpdateChannel { get; set; } = UpdateChannel.Stable;
@@ -51,6 +72,13 @@ public sealed class AppSettings
         var baseColor = ColorParser.ParseOrDefault(MarkerColor, 0xFFFFE600);
         var rgb = PageColors.Mix(0xFFFFFFFF, baseColor, Math.Clamp(MarkerStrength, 0.2, 1)) & 0xFFFFFF;
         var alpha = (uint)Math.Round(255 * (1 - Math.Clamp(MarkerTransparency, 0, 0.9)));
+        return (alpha << 24) | rgb;
+    }
+
+    public uint ResolveDrawArgb()
+    {
+        var rgb = ColorParser.ParseOrDefault(DrawColor, 0xFFD9363E) & 0xFFFFFF;
+        var alpha = (uint)Math.Round(255 * (1 - Math.Clamp(DrawTransparency, 0, 0.9)));
         return (alpha << 24) | rgb;
     }
 

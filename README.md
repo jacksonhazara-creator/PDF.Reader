@@ -10,36 +10,41 @@ A fast, simple and secure PDF reader for Windows. No ads, no account, no cloud, 
 - **Secure by default.** Embedded JavaScript is never executed (the PDF engine has no JavaScript runtime at all). Links, attachments and "launch" actions never run automatically; a banner tells you when a document contains them.
 - **Simple, powerful when needed.** The page fills the window. Everything else lives in **All tools** (☰) or the **command palette** (Ctrl+K).
 
-## Features (v0.1, Phase 1: reader)
+## Features
 
 | | |
 |---|---|
 | Reading | Continuous scroll, zoom (Ctrl+wheel, fit width/page), document tabs, reading mode (F11) |
 | Find | Search with match-case / whole-word, results stream in as pages are scanned |
-| Navigate | Thumbnails and bookmarks sidebar (F4), go to page (Ctrl+G) |
-| Text | Select and copy, plus a popup with Copy and Read aloud |
+| Right panel | **Pages** (thumbnails + type a page number), **Bookmarks** (go to, add, delete), **Comments** (page, date, go to, delete). Collapses to a slim strip |
+| Toolbar | Grouped tools with icon + name: **Select** (select, pan), **Comment** (add comment, replace selected text, insert text, text comment, attach file), **Marker** (highlight, underline, strikethrough), **Draw** (freehand, line, line arrow, arrow, rectangle, circle, text callout, polygon, cloud, connected line, stamps), **Text** (type text, cross, check, dot, circle around, cross out), **Signature** (signature, initials). Drag the grip to dock it left/right/top or let it float |
+| Comments | Attached to the first or last word of the text; shapes: square, circle, cloud, speech bubble, star. Hover shows date, comment and the referenced text |
+| Marker | Any color, adjustable transparency and color strength; on images it draws freehand |
+| Saving | Save (Ctrl+S) appends changes as an incremental update, so the original bytes stay intact; Save as; asks before closing with unsaved changes; Undo (Ctrl+Z) |
 | Page colors | Normal, Dark, Sepia, Custom. *Keep images natural* option. Display only, the file is never changed |
 | Read aloud | Offline Windows voices (Ctrl+Shift+Y) |
-| Print | Windows print dialog, original colors |
+| Print | Print button / Windows print dialog, original colors |
 | Start screen | Open button, drag & drop, recent files with thumbnails |
 | Session | Reopens your tabs at the page you left |
 | Updates | Settings → Updates: check, changelog, download in background, restart to install. Stable or Beta channel |
 | Languages | English, Deutsch |
 
-Phases 2–4 (annotate & organize, tools such as redaction, OCR and encryption, then advanced features) are planned in [docs/ROADMAP.md](docs/ROADMAP.md).
-
+All marks are standard PDF annotations (highlight, underline, strikeout, ink, square, circle, stamp, text, file attachment), so other PDF apps show them too. Signatures here are drawn/typed images, not certificate-based digital signatures (planned for Phase 4).
 ## Keyboard shortcuts
 
 | Action | Keys |
 |---|---|
 | Open / close | Ctrl+O / Ctrl+W |
+| Save / Save as | Ctrl+S / Ctrl+Shift+S |
+| Undo last mark or comment | Ctrl+Z |
+| Highlight / Comment / Draw / Type text | Ctrl+Shift+H / M / F / T |
 | Command palette | Ctrl+K |
 | All tools | Ctrl+T |
 | Search, next, previous | Ctrl+F, F3, Shift+F3 |
 | Zoom in / out | Ctrl+Plus / Ctrl+Minus, Ctrl+wheel |
 | Fit width / actual size / fit page | Ctrl+0 / Ctrl+1 / Ctrl+2 |
 | Go to page, first, last | Ctrl+G, Ctrl+Home, Ctrl+End |
-| Sidebar | F4 |
+| Right panel | F4 |
 | Reading mode | F11 (Esc to leave) |
 | Cycle page colors | Ctrl+Shift+D |
 | Read aloud (start/stop) | Ctrl+Shift+Y |

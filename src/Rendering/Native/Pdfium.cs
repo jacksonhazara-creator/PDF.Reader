@@ -245,6 +245,20 @@ internal static unsafe partial class Pdfium
     [LibraryImport(Lib)] public static partial int FPDFPageObj_SetLineJoin(IntPtr obj, int join);
     [LibraryImport(Lib)] public static partial void FPDFPageObj_Destroy(IntPtr obj);
 
+    // Inspecting / recoloring existing annotations
+    public const int FPDF_ANNOT_LINK = 2;
+    public const int FPDF_ANNOT_POPUP = 16;
+    public const int FPDF_ANNOT_WIDGET = 20;
+    public const int FPDF_PAGEOBJ_TEXT = 1;
+    public const int FPDF_PAGEOBJ_PATH = 2;
+    [LibraryImport(Lib)] public static partial int FPDFAnnot_GetColor(IntPtr annot, int type, uint* r, uint* g, uint* b, uint* a);
+    [LibraryImport(Lib)] public static partial int FPDFAnnot_GetObjectCount(IntPtr annot);
+    [LibraryImport(Lib)] public static partial IntPtr FPDFAnnot_GetObject(IntPtr annot, int index);
+    [LibraryImport(Lib)] public static partial int FPDFAnnot_UpdateObject(IntPtr annot, IntPtr obj);
+    [LibraryImport(Lib)] public static partial int FPDFPageObj_GetType(IntPtr obj);
+    [LibraryImport(Lib)] public static partial int FPDFPageObj_GetFillColor(IntPtr obj, uint* r, uint* g, uint* b, uint* a);
+    [LibraryImport(Lib)] public static partial int FPDFPageObj_GetStrokeColor(IntPtr obj, uint* r, uint* g, uint* b, uint* a);
+
     // File attachment annotations
     [LibraryImport(Lib)] public static partial IntPtr FPDFAnnot_AddFileAttachment(IntPtr annot, ushort* name);
     [LibraryImport(Lib)] public static partial int FPDFAttachment_SetFile(IntPtr attachment, IntPtr document, void* contents, uint length);

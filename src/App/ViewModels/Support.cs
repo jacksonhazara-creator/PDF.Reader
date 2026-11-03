@@ -33,7 +33,7 @@ public sealed class AppCommand
     public string GestureText { get; }
     public override string ToString() => Title;
 
-    public Geometry? Icon => Avalonia.Application.Current?.TryGetResource(IconKey, null, out var g) == true ? g as Geometry : null;
+    public object? Icon => Avalonia.Application.Current?.TryGetResource(IconKey, null, out var g) == true ? g : null;
 
     private static string LocalizeGesture(string gesture)
     {

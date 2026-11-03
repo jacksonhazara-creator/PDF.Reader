@@ -4,13 +4,15 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PdfReader.App.Localization;
 using PdfReader.App.Services;
+using PdfReader.Core.Bookmarks;
+using PdfReader.Core.Markup;
 using PdfReader.Core.Search;
 using PdfReader.Core.Settings;
 using PdfReader.Rendering;
 
 namespace PdfReader.App.ViewModels;
 
-public enum SidebarTab { Thumbnails, Outline }
+public enum SidebarTab { Thumbnails, Outline, Comments }
 
 public sealed partial class DocumentViewModel : ObservableObject, IAsyncDisposable
 {
@@ -22,8 +24,9 @@ public sealed partial class DocumentViewModel : ObservableObject, IAsyncDisposab
     private Dictionary<int, List<SearchHit>> _hitsByPage = new();
     private bool _outlineLoaded;
 
-    public DocumentViewModel(MainViewModel main, PdfDocument document, string filePath, DocumentViewState state)
+    public DocumentViewModel(MainViewModel main, PdfDocument document, string filePath, DocumentViewState state, string? password = null)
     {
+        Password = password;
         _main = main;
         Document = document;
         FilePath = filePath;
@@ -32,13 +35,16 @@ public sealed partial class DocumentViewModel : ObservableObject, IAsyncDisposab
         ZoomMode = state.ZoomMode;
         Zoom = state.Zoom > 0 ? state.Zoom : 1;
         ColorOverride = state.PageColorOverride;
-        IsSidebarOpen = main.State.SidebarVisible;
+        IsSidebarOpen = main.Settings.RightPanelOpen;
+        SidebarTab = Enum.TryParse<SidebarTab>(main.Settings.RightPanelTab, out var tab) ? tab : SidebarTab.Thumbnails;
         Security = document.Security;
         _revisions = new int[document.PageCount];
         UpdateSecurityBanner();
     }
 
     public long Id { get; } = Interlocked.Increment(ref s_nextId);
+    /// <summary>Kept in memory only (needed to edit bookmarks of protected files on save).</summary>
+    public string? Password { get; }
     public PdfDocument Document { get; }
     public string FilePath { get; }
     public string Title => Path.GetFileName(FilePath);
@@ -104,15 +110,16 @@ public sealed partial class DocumentViewModel : ObservableObject, IAsyncDisposab
                 t.Reset();
     }
 
-    // --- Sidebar: thumbnails & outline ----------------------------------------------------
+    // --- Right panel: pages, bookmarks, comments ------------------------------------------
 
     [ObservableProperty] public partial bool IsSidebarOpen { get; set; }
     [ObservableProperty] public partial SidebarTab SidebarTab { get; set; }
     [ObservableProperty] public partial IReadOnlyList<OutlineItemViewModel> Outline { get; set; } = [];
 
-    public bool HasOutline => Outline.Count > 0;
+    public bool HasOutline => Bookmarks.Count > 0;
     public bool IsThumbnailsTab { get => SidebarTab == SidebarTab.Thumbnails; set { if (value) SidebarTab = SidebarTab.Thumbnails; } }
     public bool IsOutlineTab { get => SidebarTab == SidebarTab.Outline; set { if (value) SidebarTab = SidebarTab.Outline; } }
+    public bool IsCommentsTab { get => SidebarTab == SidebarTab.Comments; set { if (value) SidebarTab = SidebarTab.Comments; } }
 
     public IReadOnlyList<ThumbnailViewModel> Thumbnails
     {
@@ -132,39 +139,148 @@ public sealed partial class DocumentViewModel : ObservableObject, IAsyncDisposab
     {
         OnPropertyChanged(nameof(IsThumbnailsTab));
         OnPropertyChanged(nameof(IsOutlineTab));
-        if (value == SidebarTab.Outline)
-            _ = LoadOutlineAsync();
+        OnPropertyChanged(nameof(IsCommentsTab));
+        _main.Settings.RightPanelTab = value.ToString();
+        _main.SaveSettings();
+        LoadTab();
     }
 
     partial void OnIsSidebarOpenChanged(bool value)
     {
-        _main.State.SidebarVisible = value;
-        if (value && SidebarTab == SidebarTab.Outline)
-            _ = LoadOutlineAsync();
+        _main.Settings.RightPanelOpen = value;
+        _main.SaveSettings();
+        if (value)
+            LoadTab();
     }
 
-    partial void OnOutlineChanged(IReadOnlyList<OutlineItemViewModel> value) => OnPropertyChanged(nameof(HasOutline));
+    private void LoadTab()
+    {
+        if (SidebarTab == SidebarTab.Outline)
+            _ = LoadOutlineAsync();
+        else if (SidebarTab == SidebarTab.Comments)
+            _ = LoadAllCommentsAsync();
+    }
 
     public void ShowSidebar(SidebarTab tab)
     {
         SidebarTab = tab;
         IsSidebarOpen = true;
+        LoadTab();
     }
 
-    public async Task LoadOutlineAsync()
+    // Bookmarks: flattened for the list; edits are applied to the file on save (PDFium can't edit outlines).
+
+    public ObservableCollection<BookmarkItemViewModel> Bookmarks { get; } = [];
+    private readonly List<OutlineEdit> _outlineEdits = [];
+    public bool HasOutlineEdits => _outlineEdits.Count > 0;
+    public IReadOnlyList<OutlineEdit> OutlineEdits => _outlineEdits;
+
+    public async Task LoadOutlineAsync(bool force = false)
     {
-        if (_outlineLoaded)
+        if (_outlineLoaded && !force)
             return;
         _outlineLoaded = true;
         try
         {
             var items = await Document.GetOutlineAsync();
             Outline = items.Select(i => new OutlineItemViewModel(this, i)).ToList();
+            Bookmarks.Clear();
+            void Add(IReadOnlyList<OutlineItem> list, int depth, ImmutablePath path)
+            {
+                for (var i = 0; i < list.Count; i++)
+                {
+                    var p = path.Append(i);
+                    Bookmarks.Add(new BookmarkItemViewModel(this, list[i].Title, list[i].PageIndex, depth, p.Items));
+                    Add(list[i].Children, depth + 1, p);
+                }
+            }
+            Add(items, 0, ImmutablePath.Empty);
+            OnPropertyChanged(nameof(HasOutline));
         }
         catch (Exception ex) when (ex is PdfException or ObjectDisposedException)
         {
             Outline = [];
         }
+    }
+
+    public void DeleteBookmark(BookmarkItemViewModel bookmark)
+    {
+        // Remove it and its children from the list; one edit removes the subtree in the file.
+        var index = Bookmarks.IndexOf(bookmark);
+        if (index < 0)
+            return;
+        Bookmarks.RemoveAt(index);
+        while (index < Bookmarks.Count && Bookmarks[index].Depth > bookmark.Depth)
+            Bookmarks.RemoveAt(index);
+        if (bookmark.Path is { Count: > 0 } path)
+            _outlineEdits.Add(new OutlineEdit.Remove(path));
+        else
+            _outlineEdits.RemoveAll(e => e is OutlineEdit.Add a && a.Title == bookmark.Title && a.PageIndex == bookmark.PageIndex);
+        IsModified = true;
+        OnPropertyChanged(nameof(HasOutline));
+    }
+
+    public void AddBookmark(string title)
+    {
+        title = string.IsNullOrWhiteSpace(title) ? Loc.Format("PageN", CurrentPageNumber) : title.Trim();
+        _outlineEdits.Add(new OutlineEdit.Add(title, CurrentPage));
+        Bookmarks.Add(new BookmarkItemViewModel(this, title, CurrentPage, 0, []));
+        IsModified = true;
+        OnPropertyChanged(nameof(HasOutline));
+    }
+
+    [RelayCommand] private Task AddBookmarkPrompt() => _main.AddBookmarkPromptAsync(this);
+
+    /// <summary>After saving: bookmark edits are in the file; reload them from it.</summary>
+    public async Task AfterSaveAsync()
+    {
+        _outlineEdits.Clear();
+        IsModified = Document.IsModified;
+        await LoadOutlineAsync(force: true);
+    }
+
+    // Comments (all pages)
+
+    public ObservableCollection<CommentItemViewModel> AllComments { get; } = [];
+    public bool HasComments => AllComments.Count > 0;
+    private bool _allCommentsLoading;
+
+    /// <summary>Asks the viewer to scroll to a comment and show its card.</summary>
+    public event Action<PdfComment>? CommentFocusRequested;
+    public void FocusComment(PdfComment comment) => CommentFocusRequested?.Invoke(comment);
+
+    public async Task LoadAllCommentsAsync()
+    {
+        if (_allCommentsLoading)
+            return;
+        _allCommentsLoading = true;
+        try
+        {
+            for (var page = 0; page < PageCount; page++)
+            {
+                var list = _comments.TryGetValue(page, out var cached) ? cached : await Document.GetCommentsAsync(page);
+                _comments[page] = list;
+                ReplaceCommentItems(page, list);
+            }
+        }
+        catch (Exception ex) when (ex is PdfException or ObjectDisposedException or OperationCanceledException) { }
+        finally
+        {
+            _allCommentsLoading = false;
+        }
+    }
+
+    private void ReplaceCommentItems(int page, IReadOnlyList<PdfComment> list)
+    {
+        for (var i = AllComments.Count - 1; i >= 0; i--)
+            if (AllComments[i].Comment.PageIndex == page)
+                AllComments.RemoveAt(i);
+        var insertAt = 0;
+        while (insertAt < AllComments.Count && AllComments[insertAt].Comment.PageIndex < page)
+            insertAt++;
+        foreach (var c in list)
+            AllComments.Insert(insertAt++, new CommentItemViewModel(this, c));
+        OnPropertyChanged(nameof(HasComments));
     }
 
     // --- Search ---------------------------------------------------------------------------
@@ -479,7 +595,9 @@ public sealed partial class DocumentViewModel : ObservableObject, IAsyncDisposab
         if ((uint)page < (uint)_revisions.Length)
             _revisions[page]++;
         _comments.Remove(page);
-        IsModified = Document.IsModified;
+        IsModified = Document.IsModified || HasOutlineEdits;
+        if (AllComments.Count > 0 || SidebarTab == SidebarTab.Comments)
+            _ = RefreshPageCommentsAsync(page);
         OnPropertyChanged(nameof(CanUndo));
         if (_thumbnails is not null && page < _thumbnails.Count)
             _thumbnails[page].Reset();
@@ -487,11 +605,92 @@ public sealed partial class DocumentViewModel : ObservableObject, IAsyncDisposab
         CommentsChanged?.Invoke();
     }
 
-    /// <summary>After saving: the file now holds every change.</summary>
-    public void MarkSaved() => IsModified = Document.IsModified;
+    private async Task RefreshPageCommentsAsync(int page)
+    {
+        try
+        {
+            var list = await Document.GetCommentsAsync(page);
+            _comments[page] = list;
+            ReplaceCommentItems(page, list);
+            CommentsChanged?.Invoke();
+        }
+        catch (Exception ex) when (ex is PdfException or ObjectDisposedException) { }
+    }
+
+    public Task MarkTextAsync(TextSelection selection, TextMarkupKind kind) => EditAsync(selection.PageIndex, async () =>
+    {
+        if (selection.IsEmpty || selection.Rects.Count == 0)
+            return null;
+        Selection = null;
+        return await Document.AddTextMarkupAsync(selection.PageIndex, kind, selection.Rects, _main.Settings.ResolveMarkerArgb());
+    });
+
+    /// <summary>Strikes the selected text and records the replacement as a comment on it.</summary>
+    public Task ReplaceTextAsync(TextSelection selection, string replacement) => EditAsync(selection.PageIndex, async () =>
+    {
+        if (selection.Rects.Count == 0 || string.IsNullOrWhiteSpace(replacement))
+            return null;
+        Selection = null;
+        return await Document.AddTextMarkupAsync(selection.PageIndex, TextMarkupKind.StrikeOut, selection.Rects,
+            ColorParser.ParseOrDefault(_main.Settings.CommentColor, 0xFFD9363E) | 0xFF000000, replacement.Trim(), "Replace", selection.Text.Trim());
+    });
+
+    public Task InsertTextAsync(int page, PdfPoint at, string text) => EditAsync(page, async () =>
+        string.IsNullOrWhiteSpace(text) ? null
+            : await Document.AddInsertAsync(page, new PdfRect(at.X - 5, at.Y - 9, 10, 10), text.Trim(), ColorParser.ParseOrDefault(_main.Settings.CommentColor, 0xFF2F6FEB)));
+
+    public Task AttachFileAsync(int page, PdfPoint at, string filePath) => EditAsync(page, async () =>
+    {
+        var info = new FileInfo(filePath);
+        if (!info.Exists || info.Length > 50 * 1024 * 1024)
+            throw new ArgumentException(Loc.Get("AttachTooLarge"));
+        var data = await File.ReadAllBytesAsync(filePath);
+        return await Document.AddFileAttachmentAsync(page, new PdfRect(at.X - 8, at.Y - 10, 16, 20), info.Name, data,
+            ColorParser.ParseOrDefault(_main.Settings.CommentColor, 0xFF2F6FEB));
+    });
+
+    public Task InkAsync(int page, IReadOnlyList<IReadOnlyList<PdfPoint>> strokes, uint argb, double width) => EditAsync(page, async () =>
+        strokes.Count == 0 || strokes.All(s => s.Count < 2) ? null : await Document.AddInkAsync(page, strokes, argb, width));
+
+    public Task ShapeAsync(int page, ShapeKind kind, PdfRect rect, uint argb, double width) => EditAsync(page, async () =>
+        rect.Width < 2 || rect.Height < 2 ? null : await Document.AddShapeAsync(page, kind, rect, argb, width));
+
+    public Task StampAsync(int page, IReadOnlyList<StampPart> parts, string tag, string? contents = null) => EditAsync(page, async () =>
+        parts.Count == 0 ? null : await Document.AddStampAsync(page, parts, tag, contents));
+
+    // --- Right-click actions on existing marks --------------------------------------------
+
+    public async Task DeleteAnnotationAsync(PdfAnnotationHit hit)
+    {
+        try
+        {
+            if (await Document.RemoveAnnotationAsync(hit.PageIndex, hit.Id))
+                MarkPageChanged(hit.PageIndex);
+        }
+        catch (Exception ex) when (ex is PdfException or ObjectDisposedException) { }
+    }
+
+    public async Task RecolorAnnotationAsync(PdfAnnotationHit hit, uint rgb)
+    {
+        try
+        {
+            if (await Document.SetAnnotationColorAsync(hit.PageIndex, hit.Id, rgb))
+                MarkPageChanged(hit.PageIndex);
+        }
+        catch (Exception ex) when (ex is PdfException or ObjectDisposedException) { }
+    }
+
+    public async Task EditAnnotationTextAsync(PdfAnnotationHit hit, string text)
+    {
+        try
+        {
+            if (await Document.SetAnnotationTextAsync(hit.PageIndex, hit.Id, text.Trim()))
+                MarkPageChanged(hit.PageIndex);
+        }
+        catch (Exception ex) when (ex is PdfException or ObjectDisposedException) { }
+    }
 
     // --- Persistence -------------------------------------------------------------------------
-
     public void SaveViewState(DocumentViewState state)
     {
         state.PageIndex = CurrentPage;
@@ -597,4 +796,48 @@ public sealed partial class ThumbnailViewModel : ObservableObject
         OnPropertyChanged(nameof(Image));
         old?.Dispose();
     }
+}
+
+/// <summary>One bookmark row in the right panel (flattened tree).</summary>
+public sealed partial class BookmarkItemViewModel(DocumentViewModel owner, string title, int pageIndex, int depth, IReadOnlyList<int> path)
+{
+    public string Title { get; } = title;
+    public int PageIndex { get; } = pageIndex;
+    public int Depth { get; } = depth;
+    public IReadOnlyList<int> Path { get; } = path;
+    public string PageLabel => PageIndex >= 0 ? Loc.Format("PageShort", PageIndex + 1) : "";
+    public Avalonia.Thickness Indent => new(Depth * 14, 0, 0, 0);
+    public override string ToString() => Title;
+
+    [RelayCommand] private void Go() { if (PageIndex >= 0) owner.GoToPage(PageIndex); }
+    [RelayCommand] private void Delete() => owner.DeleteBookmark(this);
+}
+
+/// <summary>One comment row in the right panel: what, where (page) and when.</summary>
+public sealed partial class CommentItemViewModel(DocumentViewModel owner, PdfComment comment)
+{
+    public PdfComment Comment { get; } = comment;
+    public string Text => Comment.Kind switch
+    {
+        "Replace" => Loc.Format("ReplaceWith", Comment.Text),
+        "Insert" => Loc.Format("InsertWhat", Comment.Text),
+        "Attachment" => "📎 " + Comment.Text,
+        _ => Comment.Text,
+    };
+    public string Quote => Comment.Quote.Length == 0 ? "" : "“" + (Comment.Quote.Length > 80 ? Comment.Quote[..80] + "…" : Comment.Quote) + "”";
+    public bool HasQuote => Comment.Quote.Length > 0;
+    public string PageLabel => Loc.Format("PageN", Comment.PageIndex + 1);
+    public string DateText => Comment.CreatedUtc == DateTime.MinValue ? "" : Comment.CreatedUtc.ToLocalTime().ToString("g", System.Globalization.CultureInfo.CurrentCulture);
+    public Avalonia.Media.IBrush Color { get; } = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.FromUInt32(comment.Color | 0xFF000000));
+    public override string ToString() => Text;
+
+    [RelayCommand] private void Go() => owner.FocusComment(Comment);
+    [RelayCommand] private Task Delete() => owner.DeleteCommentAsync(Comment);
+}
+
+/// <summary>Index path into the outline tree.</summary>
+public sealed record ImmutablePath(IReadOnlyList<int> Items)
+{
+    public static readonly ImmutablePath Empty = new(Array.Empty<int>());
+    public ImmutablePath Append(int index) => new([.. Items, index]);
 }

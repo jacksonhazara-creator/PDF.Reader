@@ -250,12 +250,14 @@ public sealed partial class PdfDocument
     {
         var page = GetPage(pageIndex);
         var count = Pdfium.FPDFPage_GetAnnotCount(page.Page);
+        // Annotations without an id (made by other apps) are addressed as "#index".
+        var byIndex = id.StartsWith('#') && int.TryParse(id.AsSpan(1), System.Globalization.NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx) ? idx : -1;
         for (var i = 0; i < count; i++)
         {
             var annot = Pdfium.FPDFPage_GetAnnot(page.Page, i);
             if (annot == IntPtr.Zero)
                 continue;
-            var match = GetString(annot, KeyId) == id;
+            var match = i == byIndex || GetString(annot, KeyId) == id;
             Pdfium.FPDFPage_CloseAnnot(annot);
             if (match && Pdfium.FPDFPage_RemoveAnnot(page.Page, i) != 0)
             {

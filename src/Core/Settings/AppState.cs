@@ -14,6 +14,10 @@ public sealed class AppState
     public Dictionary<string, DocumentViewState> Documents { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public bool SidebarVisible { get; set; }
 
+    /// <summary>Saved signature and initials (local only), reused every time you sign.</summary>
+    public SignatureData? Signature { get; set; }
+    public SignatureData? Initials { get; set; }
+
     public void AddRecent(string path, int pageCount)
     {
         RecentFiles.RemoveAll(r => string.Equals(r.Path, path, StringComparison.OrdinalIgnoreCase));
@@ -67,4 +71,14 @@ public sealed class DocumentViewState
     /// <summary>Optional per-document override of the global page color mode.</summary>
     public PageColorMode? PageColorOverride { get; set; }
     public DateTime LastViewedUtc { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>A drawn (normalized strokes) or typed signature.</summary>
+public sealed class SignatureData
+{
+    /// <summary>Strokes as [x0, y0, x1, y1, ...] in 0..1 of the signature box.</summary>
+    public List<double[]> Strokes { get; set; } = [];
+    public double Aspect { get; set; } = 3;
+    /// <summary>Set for a typed signature instead of strokes.</summary>
+    public string? Typed { get; set; }
 }

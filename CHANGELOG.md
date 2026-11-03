@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Toolbar with grouped tools (icon + name), movable: dock left / right / top or floating.
+- Comment tools: add comment (square, circle, cloud, speech bubble, star; first or last word), replace selected text, insert text, text comment, attach file.
+- Marker: highlight, underline, strikethrough; color, transparency and color strength; freehand on images.
+- Draw: freehand, line, line arrow, arrow, rectangle, circle, text callout, polygon, cloud, connected line, stamp palette.
+- Text: type text, crossmark, checkmark, dot, circle around, cross out.
+- Signature and initials (draw or type), saved locally for reuse.
+- Right panel: pages with page box, bookmarks (go to, add, delete), comments (page, date, go to, delete); collapsible.
+- File menu and Print button; Save, Save as, unsaved-changes prompt, undo.
+
+### Changed
+- All tools panel is docked (pushes the document aside), dark grey, with a Hide button.
+- App logo is red.
+
+### Fixed
+- Esc always leaves reading mode first.
+- Window title and fullscreen button no longer overlap the top bar.
+
 ## [0.1.0]
 
 First preview: Phase 1, a fast and secure reader.

@@ -59,6 +59,37 @@ internal static partial class PrintDialog
     [LibraryImport("gdi32.dll")]
     internal static partial int DeleteDC(IntPtr hdc);
 
+    [LibraryImport("user32.dll")]
+    private static partial int EnableWindow(IntPtr hwnd, int enable);
+
+    /// <summary>
+    /// Shows the dialog on its own STA thread so the app's UI thread keeps running (rendering,
+    /// accessibility). The owner window is disabled meanwhile, so the dialog still behaves modally.
+    /// </summary>
+    public static Task<PrintJob?> ShowAsync(IntPtr owner, int pageCount)
+    {
+        var tcs = new TaskCompletionSource<PrintJob?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                if (owner != IntPtr.Zero) EnableWindow(owner, 0);
+                tcs.TrySetResult(Show(owner, pageCount));
+            }
+            catch (Exception ex)
+            {
+                tcs.TrySetException(ex);
+            }
+            finally
+            {
+                if (owner != IntPtr.Zero) EnableWindow(owner, 1);
+            }
+        }) { IsBackground = true, Name = "Print dialog" };
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        return tcs.Task;
+    }
+
     public static unsafe PrintJob? Show(IntPtr owner, int pageCount)
     {
         if (pageCount <= 0)
