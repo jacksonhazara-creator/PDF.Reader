@@ -454,7 +454,15 @@ public class AppTests
         Assert.Single(app.Vm.Documents);
         Assert.DoesNotContain(app.Vm.RecentFiles, r => r.Path.Contains("pdfreader-diag", StringComparison.Ordinal));
         Assert.Equal(ToolKind.Select, app.Markup.Tool);
-        app.Click(app.All<Button>().First(b => b.Content as string == "Close" && AppSession.IsShown(b) && b.FindAncestorOfType<PdfReader.App.Views.DialogView>() is not null));
+        // The report dialog may still be laying out on a slow runner; wait until its Close button is shown.
+        Button? close = null;
+        for (var i = 0; i < 50 && close is null; i++)
+        {
+            await app.Settle(40);
+            close = app.All<Button>().FirstOrDefault(b => b.Content as string == "Close" && AppSession.IsShown(b) && b.FindAncestorOfType<PdfReader.App.Views.DialogView>() is not null);
+        }
+        Assert.NotNull(close);
+        app.Click(close);
         Assert.Null(app.Vm.Dialog);
         app.Window.Close();
     }
