@@ -25,8 +25,8 @@ public sealed class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var options = StartupOptions.Parse(desktop.Args ?? []);
-            // Benchmarks must not touch the user's settings, recent files or session.
-            var store = options.BenchmarkOutput is null
+            // Benchmarks and diagnosis runs must not touch the user's settings, recent files or session.
+            var store = !options.IsAutomated
                 ? new JsonStore()
                 : new JsonStore(Path.Combine(Path.GetTempPath(), $"pdfreader-bench-{Guid.NewGuid():N}"));
             var settings = store.LoadSettings();
@@ -41,20 +41,30 @@ public sealed class App : Application
     }
 }
 
-/// <summary>Command line: file paths to open, plus <c>--benchmark out.json</c> for CI startup measurements.</summary>
-public sealed record StartupOptions(IReadOnlyList<string> Files, string? BenchmarkOutput)
+/// <summary>
+/// Command line: file paths to open, plus <c>--benchmark out.json</c> for CI startup measurements and
+/// <c>--diagnose report.txt</c> to run the self-diagnosis unattended, write the report and exit
+/// (exit code 0 = no failed checks, 1 = at least one failed check).
+/// </summary>
+public sealed record StartupOptions(IReadOnlyList<string> Files, string? BenchmarkOutput, string? DiagnoseOutput = null)
 {
+    /// <summary>Automated runs use a throwaway settings folder and skip the single-instance handoff.</summary>
+    public bool IsAutomated => BenchmarkOutput is not null || DiagnoseOutput is not null;
+
     public static StartupOptions Parse(string[] args)
     {
         var files = new List<string>();
         string? benchmark = null;
+        string? diagnose = null;
         for (var i = 0; i < args.Length; i++)
         {
             if (args[i] == "--benchmark" && i + 1 < args.Length)
                 benchmark = args[++i];
+            else if (args[i] == "--diagnose" && i + 1 < args.Length)
+                diagnose = args[++i];
             else if (!args[i].StartsWith("--", StringComparison.Ordinal))
                 files.Add(args[i]);
         }
-        return new StartupOptions(files, benchmark);
+        return new StartupOptions(files, benchmark, diagnose);
     }
 }

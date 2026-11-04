@@ -58,6 +58,12 @@ public sealed partial class MainWindow : Window, IAppShell
             return;
         }
 
+        if (_options.DiagnoseOutput is { } reportPath)
+        {
+            await RunDiagnosisAsync(reportPath);
+            return;
+        }
+
         SingleInstance.StartServer(files => Dispatcher.UIThread.Post(async () =>
         {
             ActivateWindow();
@@ -346,6 +352,33 @@ public sealed partial class MainWindow : Window, IAppShell
         };
         await File.WriteAllTextAsync(output, JsonSerializer.Serialize(result, BenchmarkJsonContext.Default.DictionaryStringDouble));
         Close();
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Unattended self-diagnosis: --diagnose report.txt
+    // ---------------------------------------------------------------------------------------
+
+    private async Task RunDiagnosisAsync(string reportPath)
+    {
+        string report;
+        try
+        {
+            (report, _) = await new SelfDiagnostics(_vm, this).RunAsync();
+        }
+        catch (Exception ex)
+        {
+            report = $"Result: 0 passed, 0 warnings, 1 failed{Environment.NewLine}Self-diagnosis crashed: {ex}";
+        }
+        var full = Path.GetFullPath(reportPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        await File.WriteAllTextAsync(full, report);
+        var exitCode = System.Text.RegularExpressions.Regex.IsMatch(report, @"warnings, 0 failed") ? 0 : 1;
+        _closeConfirmed = true; // the sample is already closed; never prompt in an unattended run
+        // Avalonia sets the process exit code from Shutdown(), so pass it there.
+        if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+            desktop.Shutdown(exitCode);
+        else
+            Close();
     }
 }
 

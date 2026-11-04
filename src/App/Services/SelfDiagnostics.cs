@@ -23,7 +23,9 @@ namespace PdfReader.App.Services;
 /// </summary>
 public sealed class SelfDiagnostics(MainViewModel main, TopLevel window)
 {
-    private const double SmoothFrameMs = 33.4;  // ≥ 30 fps
+    // ≥ 30 fps. Frames snap to display refreshes, so a 30 fps frame on a 60 Hz screen measures
+    // 33.3 ms plus timer jitter (seen up to ~34 ms); allow that jitter without accepting slower frames.
+    private const double SmoothFrameMs = 35.0;
     private const double SharpWithinMs = 600;
 
     private readonly List<(string Area, string Name, Outcome Result, string Detail)> _checks = [];

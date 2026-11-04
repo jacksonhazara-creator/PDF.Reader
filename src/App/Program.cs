@@ -17,7 +17,7 @@ internal static class Program
             .Run();
 
         var options = StartupOptions.Parse(args);
-        if (options.BenchmarkOutput is null && !SingleInstance.TryBecomePrimary(options.Files.ToArray()))
+        if (!options.IsAutomated && !SingleInstance.TryBecomePrimary(options.Files.ToArray()))
             return; // handed the files to the window that is already open
 
         // Load and initialize PDFium on its own thread while the window is being created.

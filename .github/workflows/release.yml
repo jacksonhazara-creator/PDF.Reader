@@ -39,6 +39,10 @@ jobs:
       - name: Publish (Native AOT)
         run: dotnet publish src/App/PdfReader.App.csproj -c Release -r win-x64 -o publish -p:Version=${{ steps.version.outputs.version }}
 
+      - name: Drop debug symbols from the package
+        shell: pwsh
+        run: Remove-Item publish/*.pdb -ErrorAction SilentlyContinue
+
       - name: Startup & memory budget
         shell: pwsh
         run: ./tools/check-perf.ps1 -Exe publish/PDF.Reader.exe -Budget perf/budget.json
