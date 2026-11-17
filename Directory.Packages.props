@@ -6,7 +6,7 @@
     <PackageVersion Include="Avalonia.Desktop" Version="12.1.4" />
     <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.4" />
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageVersion Include="bblanchon.PDFium.Win32" Version="158.0.8111" />
+    <PackageVersion Include="bblanchon.PDFium.Win32" Version="160.0.8165" />
     <PackageVersion Include="Velopack" Version="1.2.161" />
     <!-- PDFsharp: 6.2.x is MIT. From 6.5.0 it is AGPL-3.0, which we must not use. Exact pin; see dependabot.yml. -->
     <PackageVersion Include="PDFsharp" Version="[6.2.4]" />
